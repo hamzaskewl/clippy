@@ -83,8 +83,9 @@ export interface ChannelState {
   messageTimes: number[]
   // Last 200 messages
   recentMessages: ChatMessage[]
-  // Spike detection
-  avgRate: number // smoothed average msgs/sec
+  // Spike detection — baseline approach
+  baseline: number // slow-moving floor (25th percentile of recent rates)
+  rateHistory: number[] // last 5 min of per-second rate snapshots
   lastSpikeAt: number | null
   peakRate: number
   // Vibe tracking — rolling scores over last 60s of messages
@@ -102,7 +103,8 @@ function getOrCreateChannel(name: string): ChannelState {
       name,
       messageTimes: [],
       recentMessages: [],
-      avgRate: 0,
+      baseline: 0,
+      rateHistory: [],
       lastSpikeAt: null,
       peakRate: 0,
       vibeWindow: [],
@@ -145,32 +147,45 @@ setInterval(() => {
 
     const currentRate = state.messageTimes.length / 60 // msgs per second over last minute
 
-    // Smoothed average (exponential moving average)
-    if (state.avgRate === 0) {
-      state.avgRate = currentRate
+    // Store rate history (keep last 5 min = 300 snapshots at 1/sec)
+    state.rateHistory.push(currentRate)
+    if (state.rateHistory.length > 300) {
+      state.rateHistory.shift()
+    }
+
+    // Calculate baseline: 25th percentile of rate history
+    // This gives us the "chill" level — what the channel looks like when nothing's happening
+    if (state.rateHistory.length >= 30) { // need at least 30s of data
+      const sorted = [...state.rateHistory].sort((a, b) => a - b)
+      const p25Index = Math.floor(sorted.length * 0.25)
+      state.baseline = sorted[p25Index]
     } else {
-      state.avgRate = state.avgRate * 0.9 + currentRate * 0.1
+      state.baseline = currentRate
     }
 
     // Clean old vibes
     state.vibeWindow = state.vibeWindow.filter(v => v.time > cutoff)
 
-    // Spike detection: current rate > 2x the smoothed average
-    if (currentRate > state.avgRate * 2 && currentRate > 1) {
-      const wasAlreadySpiking = state.lastSpikeAt && (now - state.lastSpikeAt) < 10_000
+    // Spike detection: current rate > 1.4x baseline (40% jump over the floor)
+    const spikeThreshold = Math.max(state.baseline * 1.4, 1)
+    const isSpike = currentRate > spikeThreshold && currentRate > 1
+
+    if (isSpike) {
+      const wasAlreadySpiking = state.lastSpikeAt && (now - state.lastSpikeAt) < 30_000
       state.lastSpikeAt = now
       if (currentRate > state.peakRate) {
         state.peakRate = currentRate
       }
 
-      // Only emit new spike events (not continuous ones within 10s)
+      // Only emit new spike events (debounce 30s)
       if (!wasAlreadySpiking && spikeListeners.size > 0) {
         const vibes = getVibes(state)
         const spike = {
           channel: state.name,
           spikeAt: now,
           currentRate: Math.round(currentRate * 100) / 100,
-          avgRate: Math.round(state.avgRate * 100) / 100,
+          baseline: Math.round(state.baseline * 100) / 100,
+          jumpPercent: Math.round(((currentRate - state.baseline) / state.baseline) * 100),
           vibe: vibes.dominant,
           vibeIntensity: vibes.intensity,
           clipWorthy: vibes.intensity > 10 && (vibes.dominant === 'hype' || vibes.dominant === 'funny'),
@@ -277,14 +292,16 @@ export function getChannel(name: string) {
 
   const now = Date.now()
   const msgsPerSec = Math.round((state.messageTimes.length / 60) * 100) / 100
-  const isSpike = msgsPerSec > state.avgRate * 2 && msgsPerSec > 1
+  const spikeThreshold = Math.max(state.baseline * 1.4, 1)
+  const isSpike = msgsPerSec > spikeThreshold && msgsPerSec > 1
 
   const vibes = getVibes(state)
 
   return {
     channel: state.name,
     msgsPerSec,
-    avgRate: Math.round(state.avgRate * 100) / 100,
+    baseline: Math.round(state.baseline * 100) / 100,
+    jumpPercent: state.baseline > 0 ? Math.round(((msgsPerSec - state.baseline) / state.baseline) * 100) : 0,
     isSpike,
     lastSpikeAt: state.lastSpikeAt,
     peakRate: Math.round(state.peakRate * 100) / 100,
@@ -307,11 +324,13 @@ export function getSpikes(withinMinutes = 5) {
     .filter(ch => ch.lastSpikeAt && ch.lastSpikeAt > cutoff)
     .map(ch => {
       const vibes = getVibes(ch)
+      const currentRate = Math.round((ch.messageTimes.length / 60) * 100) / 100
       return {
         channel: ch.name,
         spikeAt: ch.lastSpikeAt,
-        currentRate: Math.round((ch.messageTimes.length / 60) * 100) / 100,
-        avgRate: Math.round(ch.avgRate * 100) / 100,
+        currentRate,
+        baseline: Math.round(ch.baseline * 100) / 100,
+        jumpPercent: ch.baseline > 0 ? Math.round(((currentRate - ch.baseline) / ch.baseline) * 100) : 0,
         peakRate: Math.round(ch.peakRate * 100) / 100,
         vibe: vibes.dominant,
         vibeIntensity: vibes.intensity,
