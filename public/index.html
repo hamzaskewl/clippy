@@ -12,73 +12,130 @@
       color: #e0e0e0;
       min-height: 100vh;
       padding: 24px;
+      max-width: 960px;
+      margin: 0 auto;
     }
     header {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
       margin-bottom: 32px;
-      border-bottom: 1px solid #222;
+      border-bottom: 1px solid #1a1a1a;
       padding-bottom: 16px;
     }
     h1 { font-size: 16px; font-weight: 500; letter-spacing: 0.5px; }
-    .status { font-size: 12px; color: #666; }
-    .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; }
+    .status { font-size: 12px; color: #555; }
+    .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
     .dot.live { background: #22c55e; }
     .dot.off { background: #ef4444; }
-    .stats { display: flex; gap: 32px; margin-bottom: 32px; }
-    .stat { }
-    .stat-value { font-size: 24px; font-weight: 600; color: #fff; }
-    .stat-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
-    section { margin-bottom: 40px; }
-    h2 { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 16px; }
-    .moments-list { display: flex; flex-direction: column; gap: 8px; }
-    .moment {
-      display: grid;
-      grid-template-columns: 1fr auto auto auto auto;
-      align-items: center;
-      gap: 16px;
-      padding: 12px 16px;
-      background: #111;
-      border: 1px solid #1a1a1a;
-      border-radius: 6px;
-      font-size: 13px;
-      transition: border-color 0.15s;
+
+    .stats { display: flex; gap: 40px; margin-bottom: 36px; }
+    .stat-value { font-size: 22px; font-weight: 600; color: #fff; }
+    .stat-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1.2px; margin-top: 2px; }
+
+    section { margin-bottom: 36px; }
+    h2 {
+      font-size: 11px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 1.5px; color: #444; margin-bottom: 12px;
     }
-    .moment:hover { border-color: #333; }
-    .moment.clip-worthy { border-left: 2px solid #f59e0b; }
-    .channel-name { font-weight: 600; color: #fff; }
-    .viewers { color: #666; font-size: 11px; }
-    .jump { font-weight: 600; }
+
+    /* Spike rows */
+    .spikes-list { display: flex; flex-direction: column; gap: 4px; }
+    .spike-row {
+      display: grid;
+      grid-template-columns: 160px 70px 60px 80px 1fr 50px;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: #111;
+      border: 1px solid #161616;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .spike-row:hover { background: #161616; }
+    .spike-row.clip-worthy { border-left: 2px solid #f59e0b; }
+    .spike-row.expanded { background: #141414; border-color: #222; }
+    .channel-col { display: flex; align-items: center; gap: 8px; }
+    .channel-name { font-weight: 600; color: #fff; font-size: 13px; }
+    .viewers { color: #555; font-size: 10px; }
+    .jump { font-weight: 600; font-size: 12px; }
     .jump.high { color: #22c55e; }
     .jump.mega { color: #f59e0b; }
     .vibe-tag {
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 3px;
-      background: #1a1a1a;
-      color: #999;
+      font-size: 10px; padding: 2px 6px; border-radius: 3px;
+      background: #1a1a1a; color: #666; display: inline-block; text-align: center;
     }
     .vibe-tag.funny { background: #1a1a0a; color: #fbbf24; }
     .vibe-tag.hype { background: #0a1a0a; color: #22c55e; }
     .vibe-tag.awkward { background: #1a0a1a; color: #c084fc; }
     .vibe-tag.win { background: #0a1a1a; color: #38bdf8; }
     .vibe-tag.loss { background: #1a0a0a; color: #f87171; }
-    .vod-link { color: #666; text-decoration: none; font-size: 12px; }
+    .vibe-tag.rage { background: #1a0a0a; color: #ef4444; }
+    .vibe-tag.shock { background: #1a1a0a; color: #fb923c; }
+    .vibe-tag.clutch { background: #0a1a0a; color: #34d399; }
+    .vibe-tag.wholesome { background: #0a1a1a; color: #67e8f9; }
+    .vibe-tag.drama { background: #1a0a1a; color: #e879f9; }
+    .vod-link { color: #555; text-decoration: none; font-size: 11px; }
     .vod-link:hover { color: #fff; }
-    .time-ago { color: #444; font-size: 11px; min-width: 50px; text-align: right; }
-    .empty { color: #333; font-size: 13px; padding: 40px 0; text-align: center; }
-    .trending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
-    .trending-card {
+    .time-col { color: #333; font-size: 10px; text-align: right; }
+
+    /* Expanded detail panel */
+    .spike-detail {
+      display: none;
       padding: 12px;
-      background: #111;
+      background: #0e0e0e;
       border: 1px solid #1a1a1a;
-      border-radius: 6px;
-      font-size: 12px;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      margin-top: -4px;
+      margin-bottom: 4px;
     }
-    .trending-card .channel-name { font-size: 13px; margin-bottom: 4px; }
-    .trending-card .rate { color: #666; }
-    .trending-card .rate b { color: #fff; }
+    .spike-detail.open { display: block; }
+    .detail-description {
+      font-size: 12px; color: #999; margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    .detail-description em { color: #ccc; font-style: normal; }
+    .chat-snapshot {
+      font-size: 11px; color: #444; line-height: 1.6;
+      max-height: 180px; overflow-y: auto;
+      padding: 8px; background: #0a0a0a; border-radius: 3px;
+    }
+    .chat-snapshot .chat-user { color: #666; }
+    .chat-snapshot .chat-msg { color: #555; }
+    .classify-btn {
+      font-size: 10px; padding: 3px 8px; background: #1a1a1a; color: #666;
+      border: 1px solid #222; border-radius: 3px; cursor: pointer;
+      margin-bottom: 8px; font-family: inherit;
+    }
+    .classify-btn:hover { background: #222; color: #999; }
+    .classify-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* Trending grid */
+    .trending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+    .trending-card {
+      padding: 10px 12px;
+      background: #111;
+      border: 1px solid #161616;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    .trending-card .channel-name { font-size: 12px; margin-bottom: 3px; }
+    .trending-card .rate { color: #555; }
+    .trending-card .rate b { color: #ccc; font-weight: 500; }
+    .trending-card .vibe-tag { margin-top: 4px; }
+
+    .empty { color: #282828; font-size: 12px; padding: 32px 0; text-align: center; }
+
+    @media (max-width: 640px) {
+      body { padding: 16px; }
+      .spike-row { grid-template-columns: 1fr auto auto; gap: 6px; font-size: 11px; }
+      .spike-row .vod-link, .spike-row .time-col, .spike-row .viewers { display: none; }
+      .stats { gap: 24px; }
+      .trending-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+    }
   </style>
 </head>
 <body>
@@ -100,20 +157,20 @@
       <div class="stat-label">msg/s</div>
     </div>
     <div class="stat">
-      <div class="stat-value" id="momentCount">-</div>
-      <div class="stat-label">moments</div>
+      <div class="stat-value" id="spikeCount">0</div>
+      <div class="stat-label">spikes</div>
     </div>
   </div>
 
   <section>
     <h2>live spikes</h2>
-    <div class="moments-list" id="spikesList">
+    <div class="spikes-list" id="spikesList">
       <div class="empty">waiting for spikes...</div>
     </div>
   </section>
 
   <section>
-    <h2>trending</h2>
+    <h2>trending channels</h2>
     <div class="trending-grid" id="trendingGrid">
       <div class="empty">loading...</div>
     </div>
@@ -121,8 +178,8 @@
 
   <script>
     const spikes = []
+    let expandedId = null
 
-    // SSE for live spike alerts
     const sse = new EventSource('/alerts')
     sse.onmessage = (e) => {
       const data = JSON.parse(e.data)
@@ -131,7 +188,8 @@
         document.getElementById('statusText').textContent = 'live'
       }
       if (data.type === 'spike') {
-        spikes.unshift({ ...data, receivedAt: Date.now() })
+        const id = Date.now() + Math.random()
+        spikes.unshift({ ...data, id, receivedAt: Date.now(), mood: null, description: null, chatSnapshot: null })
         if (spikes.length > 50) spikes.pop()
         renderSpikes()
       }
@@ -143,27 +201,87 @@
 
     function renderSpikes() {
       const el = document.getElementById('spikesList')
-      document.getElementById('momentCount').textContent = spikes.length
+      document.getElementById('spikeCount').textContent = spikes.length
       if (spikes.length === 0) {
         el.innerHTML = '<div class="empty">waiting for spikes...</div>'
         return
       }
       el.innerHTML = spikes.map(s => {
-        const jumpClass = s.jumpPercent > 150 ? 'mega' : s.jumpPercent > 50 ? 'high' : ''
+        const jumpClass = s.jumpPercent > 150 ? 'mega' : s.jumpPercent > 80 ? 'high' : ''
         const ago = timeAgo(s.receivedAt)
+        const moodTag = s.mood || s.vibe
+        const isOpen = expandedId === s.id
         return `
-          <div class="moment ${s.clipWorthy ? 'clip-worthy' : ''}">
-            <div>
+          <div class="spike-row ${s.clipWorthy ? 'clip-worthy' : ''} ${isOpen ? 'expanded' : ''}" onclick="toggleSpike('${s.id}')">
+            <div class="channel-col">
               <span class="channel-name">${s.channel}</span>
-              ${s.viewers ? `<span class="viewers">${(s.viewers/1000).toFixed(1)}k viewers</span>` : ''}
+              ${s.viewers ? `<span class="viewers">${(s.viewers/1000).toFixed(1)}k</span>` : ''}
             </div>
             <span class="jump ${jumpClass}">+${s.jumpPercent}%</span>
-            <span class="vibe-tag ${s.vibe}">${s.vibe}</span>
-            ${s.vodUrl ? `<a class="vod-link" href="${s.vodUrl}" target="_blank">${s.vodTimestamp}</a>` : '<span class="vod-link">-</span>'}
-            <span class="time-ago">${ago}</span>
+            <span class="vibe-tag ${moodTag}">${moodTag}</span>
+            <span>${s.description ? '<span style="color:#555;font-size:10px">ai</span>' : ''}</span>
+            ${s.vodUrl ? `<a class="vod-link" href="${s.vodUrl}" target="_blank" onclick="event.stopPropagation()">${s.vodTimestamp}</a>` : '<span class="vod-link">-</span>'}
+            <span class="time-col">${ago}</span>
+          </div>
+          <div class="spike-detail ${isOpen ? 'open' : ''}" id="detail-${s.id}">
+            ${s.description ? `<div class="detail-description"><em>${s.mood}</em> — ${s.description}</div>` : ''}
+            ${!s.description ? `<button class="classify-btn" id="btn-${s.id}" onclick="event.stopPropagation(); classifyMoment('${s.id}')">classify with ai</button>` : ''}
+            ${s.chatSnapshot ? `
+              <div class="chat-snapshot">
+                ${s.chatSnapshot.map(m => {
+                  const idx = m.indexOf(': ')
+                  if (idx === -1) return `<div><span class="chat-msg">${esc(m)}</span></div>`
+                  return `<div><span class="chat-user">${esc(m.slice(0, idx))}:</span> <span class="chat-msg">${esc(m.slice(idx+2))}</span></div>`
+                }).join('')}
+              </div>
+            ` : '<div style="color:#333;font-size:11px">loading chat...</div>'}
           </div>
         `
       }).join('')
+    }
+
+    async function toggleSpike(id) {
+      if (expandedId === id) {
+        expandedId = null
+      } else {
+        expandedId = id
+        // Try to load chat snapshot from moments API if we don't have it
+        const spike = spikes.find(s => String(s.id) === String(id))
+        if (spike && !spike.chatSnapshot) {
+          // Find matching moment by channel + approximate time
+          try {
+            const res = await fetch(`/moments/latest/${spike.channel}`)
+            if (res.ok) {
+              const moment = await res.json()
+              spike.chatSnapshot = moment.chatSnapshot || []
+              spike.momentId = moment.id
+            }
+          } catch {}
+        }
+      }
+      renderSpikes()
+    }
+
+    async function classifyMoment(id) {
+      const spike = spikes.find(s => String(s.id) === String(id))
+      if (!spike || !spike.momentId) return
+      const btn = document.getElementById(`btn-${id}`)
+      if (btn) { btn.disabled = true; btn.textContent = 'classifying...' }
+      try {
+        const res = await fetch(`/moments/${spike.momentId}/classify`)
+        if (res.ok) {
+          const data = await res.json()
+          spike.mood = data.mood
+          spike.description = data.description
+        }
+      } catch {}
+      renderSpikes()
+    }
+
+    function esc(s) {
+      const d = document.createElement('div')
+      d.textContent = s
+      return d.innerHTML
     }
 
     function timeAgo(ts) {
@@ -173,10 +291,10 @@
       return `${Math.floor(s/3600)}h`
     }
 
-    // Poll health + trending
-    async function refresh() {
+    async function refreshTrending() {
       try {
-        const health = await fetch('/health').then(r => r.json())
+        const res = await fetch('/health')
+        const health = await res.json()
         document.getElementById('channelCount').textContent = health.totalChannels.toLocaleString()
         document.getElementById('msgRate').textContent = health.totalMsgsPerSec.toFixed(0)
         document.getElementById('statusDot').className = 'dot ' + (health.connected ? 'live' : 'off')
@@ -184,10 +302,9 @@
       } catch {}
     }
 
-    // Update time-ago every 10s
     setInterval(() => renderSpikes(), 10000)
-    setInterval(refresh, 5000)
-    refresh()
+    setInterval(refreshTrending, 5000)
+    refreshTrending()
   </script>
 </body>
 </html>

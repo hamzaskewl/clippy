@@ -269,6 +269,12 @@ app.post('/moments',
   }
 )
 
+app.get('/moments/latest/:channel', (req, res) => {
+  const result = getMoments({ channel: req.params.channel, limit: 1 })
+  if (result.length === 0) return res.status(404).json({ error: 'No moments for this channel' })
+  res.json(result[0])
+})
+
 app.get('/moments/:id', (req, res) => {
   const id = parseInt(req.params.id)
   const moment = getMomentById(id)
