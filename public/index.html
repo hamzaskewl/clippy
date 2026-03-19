@@ -227,7 +227,8 @@
             ${s.description ? `<div class="detail-description"><em>${s.mood}</em> — ${s.description}</div>` : ''}
             <div style="display:flex;gap:8px;margin-bottom:8px">
               ${!s.description ? `<button class="classify-btn" id="btn-${s.id}" onclick="event.stopPropagation(); classifyMoment('${s.id}')">classify with ai</button>` : ''}
-              ${s.momentId ? `<a class="classify-btn" href="/clip/${s.momentId}" target="_blank" style="text-decoration:none;display:inline-block" onclick="event.stopPropagation()">watch clip</a>` : ''}
+              ${s.clipUrl ? `<a class="classify-btn" href="${s.clipUrl}" target="_blank" style="text-decoration:none;display:inline-block;color:#22c55e;border-color:#22c55e44" onclick="event.stopPropagation()">clip</a>` : ''}
+              ${s.momentId ? `<a class="classify-btn" href="/clip/${s.momentId}" target="_blank" style="text-decoration:none;display:inline-block" onclick="event.stopPropagation()">watch</a>` : ''}
             </div>
             ${s.chatSnapshot ? `
               <div class="chat-snapshot">
@@ -251,13 +252,14 @@
         // Try to load chat snapshot from moments API if we don't have it
         const spike = spikes.find(s => String(s.id) === String(id))
         if (spike && !spike.chatSnapshot) {
-          // Find matching moment by channel + approximate time
           try {
             const res = await fetch(`/moments/latest/${spike.channel}`)
             if (res.ok) {
               const moment = await res.json()
               spike.chatSnapshot = moment.chatSnapshot || []
               spike.momentId = moment.id
+              spike.clipUrl = moment.clipUrl || null
+              if (moment.mood) { spike.mood = moment.mood; spike.description = moment.description }
             }
           } catch {}
         }
