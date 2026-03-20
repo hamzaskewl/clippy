@@ -116,19 +116,19 @@
 
   <div class="flow-step">
     <div class="flow-num">1</div>
-    <div>Firehose ingests chat from <b style="color:#ccc">5,000+</b> Twitch channels in real-time via websocket</div>
+    <div>Firehose ingests chat from Twitch channels in real-time via websocket. Only watched channels get full tracking.</div>
   </div>
   <div class="flow-step">
     <div class="flow-num">2</div>
-    <div>Per-channel rate tracking (5s burst window, 2-min baseline). Spike = burst &gt; 80% above baseline + 3k viewers + live</div>
+    <div>Per-channel rate tracking (5s burst window, 30s baseline). Spike threshold scales with channel size — big streamers need less % jump.</div>
   </div>
   <div class="flow-step">
     <div class="flow-num">3</div>
-    <div><span class="tag llm">LLM</span> On watched channels, Anthropic classifies the mood and decides if it's clip-worthy</div>
+    <div><span class="tag llm">LLM</span> On watched channels, Anthropic classifies the mood and describes what happened.</div>
   </div>
   <div class="flow-step">
     <div class="flow-num">4</div>
-    <div><span class="tag twitch">Twitch</span> If clip-worthy, auto-creates a Twitch clip within seconds of the moment</div>
+    <div><span class="tag twitch">Twitch</span> Every spike on a watched channel auto-creates a Twitch clip. The LLM description becomes the clip title.</div>
   </div>
   <div class="flow-step">
     <div class="flow-num">5</div>
@@ -191,7 +191,6 @@ tempo request -X POST \
   <span class="key">"jumpPercent"</span>: <span class="num">107</span>,
   <span class="key">"mood"</span>: <span class="str">"funny"</span>,
   <span class="key">"description"</span>: <span class="str">"Chat spammed SON after streamer showed off their skinny arms"</span>,
-  <span class="key">"clipWorthy"</span>: <span class="num">true</span>,
   <span class="key">"clipUrl"</span>: <span class="str">"https://clips.twitch.tv/WonderfulDifficultDragonfruitBIRB-..."</span>,
   <span class="key">"vodUrl"</span>: <span class="str">"https://twitch.tv/jynxzi?t=2h19m19s"</span>
 }</pre>
