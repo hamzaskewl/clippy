@@ -52,22 +52,37 @@ const mppx = Mppx.create({
 app.get('/api', (_req, res) => {
   const stats = getStats()
   res.json({
-    service: 'Clippy API',
-    description: 'Real-time Twitch stream intelligence. Pay per query via MPP.',
-    version: '1.0.0',
+    service: 'Clippy',
+    description: 'Real-time Twitch stream intelligence. Detects chat spikes, classifies moments with AI, auto-clips highlights. Pay-per-use via MPP.',
+    version: '2.0.0',
     status: stats.connected ? 'live' : 'connecting',
     ...stats,
+    llms_txt: '/llms.txt',
+    docs: '/docs.html',
     endpoints: {
-      'GET /': { price: 'free', description: 'Service info and status' },
-      'GET /health': { price: 'free', description: 'Health check' },
-      'POST /trending': { price: '$0.001', description: 'Top channels by chat velocity' },
-      'POST /channel': { price: '$0.001', description: 'Chat stats for a specific channel' },
-      'POST /spikes': { price: '$0.002', description: 'Channels with recent chat spikes' },
-      'POST /summarize': { price: '$0.01', description: 'LLM-powered summary of chat discussion' },
-      'GET /alerts': { price: 'free', description: 'SSE stream of real-time spike alerts. Query: ?channel=name' },
-      'POST /moments': { price: '$0.001', description: 'All auto-captured moments with VOD links and LLM summaries' },
-      'GET /moments/:id': { price: 'free', description: 'Get a specific moment by ID' },
-      'POST /watch/:channel': { price: '$0.001/spike (session)', description: 'SSE stream with LLM-classified spikes for a channel' },
+      free: {
+        'GET /health': 'Status check',
+        'GET /trending': 'Top 10 channels by burst rate',
+        'GET /alerts': 'SSE spike feed. ?channel=name to filter',
+        'GET /moments/:id': 'Get a moment by ID',
+        'GET /moments/latest/:channel': 'Latest moment for a channel',
+        'GET /moments/:id/classify': 'Trigger AI classification on a moment',
+      },
+      charge: {
+        'POST /trending': { price: '$0.001', description: 'Full trending list' },
+        'POST /channel': { price: '$0.001', description: 'Channel stats + recent messages' },
+        'POST /spikes': { price: '$0.002', description: 'All active spikes with VOD links' },
+        'POST /summarize': { price: '$0.01', description: 'LLM summary of channel chat' },
+        'POST /moments': { price: '$0.001', description: 'List captured moments' },
+      },
+      session: {
+        'POST /watch/:channel': { price: '$0.03/spike', description: 'SSE stream with AI-classified spikes + auto-clipping' },
+      },
+      watchlist: {
+        'POST /watch-clip/:channel': 'Add channel to auto-clip watchlist',
+        'DELETE /watch-clip/:channel': 'Remove from watchlist',
+        'GET /watch-clip': 'List watched channels',
+      },
     },
   })
 })
