@@ -330,7 +330,7 @@ app.get('/alerts', (req, res) => {
 
 // --- Watch (session-based, pay per spike with LLM classification) ---
 app.post('/watch/:channel',
-  mppx.session({ amount: '0.001', unitType: 'spike', description: 'Watch channel for classified spikes' }),
+  mppx.session({ amount: '0.03', unitType: 'spike', description: 'Watch channel for AI-classified spikes + auto-clipping' }),
   async (req, res) => {
     const channel = req.params.channel.toLowerCase()
     const viewers = await getViewerCount(channel)

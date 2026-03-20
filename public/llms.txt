@@ -22,7 +22,7 @@ Base URL: https://stream-intel-production.up.railway.app
 
 ## Session Endpoint (MPP session, pay per spike)
 
-- POST /watch/:channel ($0.001/spike) — SSE stream with LLM-classified spikes for a channel. Opens payment channel, charges per spike event.
+- POST /watch/:channel ($0.03/spike) — SSE stream with LLM-classified spikes + auto-clipping. Opens payment channel, charges per spike event.
 
 ## Watchlist (controls auto-clipping)
 

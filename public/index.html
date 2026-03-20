@@ -19,31 +19,57 @@
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      margin-bottom: 32px;
+      margin-bottom: 24px;
       border-bottom: 1px solid #1a1a1a;
       padding-bottom: 16px;
     }
     h1 { font-size: 16px; font-weight: 500; letter-spacing: 0.5px; }
+    nav a { font-size: 12px; color: #555; text-decoration: none; margin-left: 12px; }
+    nav a:hover { color: #fff; }
+    nav a.active { color: #fff; }
     .status { font-size: 12px; color: #555; }
-    .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
     .dot.live { background: #22c55e; }
     .dot.off { background: #ef4444; }
 
-    .stats { display: flex; gap: 40px; margin-bottom: 36px; }
-    .stat-value { font-size: 22px; font-weight: 600; color: #fff; }
+    /* Watch input */
+    .watch-bar {
+      display: flex; gap: 8px; margin-bottom: 24px;
+    }
+    .watch-bar input {
+      flex: 1; background: #111; border: 1px solid #1a1a1a; border-radius: 4px;
+      padding: 10px 14px; color: #fff; font-family: inherit; font-size: 13px; outline: none;
+    }
+    .watch-bar input:focus { border-color: #333; }
+    .watch-bar input::placeholder { color: #2a2a2a; }
+    .watch-bar button {
+      background: #1a1a1a; color: #888; border: 1px solid #222; border-radius: 4px;
+      padding: 10px 16px; font-family: inherit; font-size: 12px; cursor: pointer;
+    }
+    .watch-bar button:hover { background: #222; color: #fff; }
+
+    /* Watching tags */
+    .watching-tags { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+    .watch-tag {
+      font-size: 11px; padding: 4px 10px; background: #111; border: 1px solid #1a1a1a;
+      border-radius: 3px; color: #888; display: flex; align-items: center; gap: 6px;
+    }
+    .watch-tag .remove { color: #444; cursor: pointer; font-size: 13px; }
+    .watch-tag .remove:hover { color: #ef4444; }
+
+    /* Stats */
+    .stats { display: flex; gap: 40px; margin-bottom: 24px; }
+    .stat-value { font-size: 20px; font-weight: 600; color: #fff; }
     .stat-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1.2px; margin-top: 2px; }
 
-    section { margin-bottom: 36px; }
-    h2 {
-      font-size: 11px; font-weight: 500; text-transform: uppercase;
-      letter-spacing: 1.5px; color: #444; margin-bottom: 12px;
-    }
+    section { margin-bottom: 32px; }
+    h2 { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; color: #444; margin-bottom: 10px; }
 
     /* Spike rows */
-    .spikes-list { display: flex; flex-direction: column; gap: 4px; }
+    .spikes-list { display: flex; flex-direction: column; gap: 3px; }
     .spike-row {
       display: grid;
-      grid-template-columns: 160px 70px 60px 80px 1fr 50px;
+      grid-template-columns: 140px 60px 55px 1fr 70px 40px;
       align-items: center;
       gap: 8px;
       padding: 10px 12px;
@@ -55,17 +81,16 @@
       transition: background 0.1s;
     }
     .spike-row:hover { background: #161616; }
-    .spike-row.clip-worthy { border-left: 2px solid #f59e0b; }
-    .spike-row.expanded { background: #141414; border-color: #222; }
-    .channel-col { display: flex; align-items: center; gap: 8px; }
+    .spike-row.has-clip { border-left: 2px solid #22c55e; }
+    .channel-col { display: flex; align-items: center; gap: 6px; }
     .channel-name { font-weight: 600; color: #fff; font-size: 13px; }
-    .viewers { color: #555; font-size: 10px; }
-    .jump { font-weight: 600; font-size: 12px; }
+    .viewers { color: #444; font-size: 10px; }
+    .jump { font-weight: 600; }
     .jump.high { color: #22c55e; }
     .jump.mega { color: #f59e0b; }
     .vibe-tag {
       font-size: 10px; padding: 2px 6px; border-radius: 3px;
-      background: #1a1a1a; color: #666; display: inline-block; text-align: center;
+      background: #1a1a1a; color: #666; text-align: center;
     }
     .vibe-tag.funny { background: #1a1a0a; color: #fbbf24; }
     .vibe-tag.hype { background: #0a1a0a; color: #22c55e; }
@@ -77,64 +102,56 @@
     .vibe-tag.clutch { background: #0a1a0a; color: #34d399; }
     .vibe-tag.wholesome { background: #0a1a1a; color: #67e8f9; }
     .vibe-tag.drama { background: #1a0a1a; color: #e879f9; }
-    .vod-link { color: #555; text-decoration: none; font-size: 11px; }
+    .vibe-tag.sad { background: #1a0a0a; color: #f87171; }
+    .vibe-tag.neutral { background: #1a1a1a; color: #666; }
+    .vibe-tag.error { background: #1a0a0a; color: #ef4444; }
+    .desc-col { color: #555; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vod-link { color: #444; text-decoration: none; font-size: 11px; }
     .vod-link:hover { color: #fff; }
     .time-col { color: #333; font-size: 10px; text-align: right; }
 
-    /* Expanded detail panel */
+    /* Detail panel */
     .spike-detail {
-      display: none;
-      padding: 12px;
-      background: #0e0e0e;
-      border: 1px solid #1a1a1a;
-      border-top: none;
-      border-radius: 0 0 4px 4px;
-      margin-top: -4px;
-      margin-bottom: 4px;
+      display: none; padding: 12px; background: #0e0e0e;
+      border: 1px solid #1a1a1a; border-top: none;
+      border-radius: 0 0 4px 4px; margin-top: -3px; margin-bottom: 3px;
     }
     .spike-detail.open { display: block; }
-    .detail-description {
-      font-size: 12px; color: #999; margin-bottom: 10px;
-      line-height: 1.5;
+    .detail-top { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+    .detail-top a {
+      font-size: 10px; padding: 3px 8px; background: #1a1a1a; color: #666;
+      border: 1px solid #222; border-radius: 3px; text-decoration: none; font-family: inherit;
     }
-    .detail-description em { color: #ccc; font-style: normal; }
+    .detail-top a:hover { background: #222; color: #999; }
+    .detail-top a.clip-link { color: #22c55e; border-color: #22c55e44; }
+    .detail-desc { font-size: 12px; color: #888; margin-bottom: 10px; line-height: 1.5; }
     .chat-snapshot {
       font-size: 11px; color: #444; line-height: 1.6;
-      max-height: 180px; overflow-y: auto;
+      max-height: 160px; overflow-y: auto;
       padding: 8px; background: #0a0a0a; border-radius: 3px;
     }
-    .chat-snapshot .chat-user { color: #666; }
-    .chat-snapshot .chat-msg { color: #555; }
-    .classify-btn {
-      font-size: 10px; padding: 3px 8px; background: #1a1a1a; color: #666;
-      border: 1px solid #222; border-radius: 3px; cursor: pointer;
-      margin-bottom: 8px; font-family: inherit;
-    }
-    .classify-btn:hover { background: #222; color: #999; }
-    .classify-btn:disabled { opacity: 0.3; cursor: default; }
+    .chat-snapshot .u { color: #555; }
 
-    /* Trending grid */
-    .trending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+    /* Trending */
+    .trending-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px; }
     .trending-card {
-      padding: 10px 12px;
-      background: #111;
-      border: 1px solid #161616;
-      border-radius: 4px;
-      font-size: 11px;
+      padding: 10px 12px; background: #111; border: 1px solid #161616;
+      border-radius: 4px; font-size: 11px; cursor: pointer;
     }
-    .trending-card .channel-name { font-size: 12px; margin-bottom: 3px; }
+    .trending-card:hover { border-color: #333; }
+    .trending-card .channel-name { font-size: 12px; margin-bottom: 2px; }
     .trending-card .rate { color: #555; }
     .trending-card .rate b { color: #ccc; font-weight: 500; }
-    .trending-card .vibe-tag { margin-top: 4px; }
 
-    .empty { color: #282828; font-size: 12px; padding: 32px 0; text-align: center; }
+    .empty { color: #222; font-size: 12px; padding: 24px 0; text-align: center; }
+    .pulse { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
 
     @media (max-width: 640px) {
       body { padding: 16px; }
-      .spike-row { grid-template-columns: 1fr auto auto; gap: 6px; font-size: 11px; }
-      .spike-row .vod-link, .spike-row .time-col, .spike-row .viewers { display: none; }
-      .stats { gap: 24px; }
-      .trending-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+      .spike-row { grid-template-columns: 1fr auto auto; }
+      .spike-row .desc-col, .spike-row .vod-link, .spike-row .time-col { display: none; }
+      .stats { gap: 20px; }
     }
   </style>
 </head>
@@ -142,13 +159,22 @@
   <header>
     <h1>clippy</h1>
     <div style="display:flex;align-items:center;gap:16px">
-      <nav style="font-size:12px"><a href="/" style="color:#fff;text-decoration:none">dashboard</a> <a href="/docs.html" style="color:#555;text-decoration:none;margin-left:12px">docs</a> <a href="/demo.html" style="color:#555;text-decoration:none;margin-left:12px">demo</a></nav>
+      <nav>
+        <a href="/" class="active">dashboard</a>
+        <a href="/docs.html">docs</a>
+      </nav>
       <div class="status">
         <span class="dot" id="statusDot"></span>
         <span id="statusText">connecting...</span>
       </div>
     </div>
   </header>
+
+  <div class="watch-bar">
+    <input type="text" id="channelInput" placeholder="watch a channel..." onkeydown="if(event.key==='Enter')addWatch()">
+    <button onclick="addWatch()">watch</button>
+  </div>
+  <div class="watching-tags" id="watchingTags"></div>
 
   <div class="stats">
     <div class="stat">
@@ -163,17 +189,21 @@
       <div class="stat-value" id="spikeCount">0</div>
       <div class="stat-label">spikes</div>
     </div>
+    <div class="stat">
+      <div class="stat-value" id="clipCount">0</div>
+      <div class="stat-label">clips</div>
+    </div>
   </div>
 
   <section>
     <h2>live spikes</h2>
     <div class="spikes-list" id="spikesList">
-      <div class="empty">waiting for spikes...</div>
+      <div class="empty"><span class="pulse">add a channel to start watching</span></div>
     </div>
   </section>
 
   <section>
-    <h2>trending channels</h2>
+    <h2>trending</h2>
     <div class="trending-grid" id="trendingGrid">
       <div class="empty">loading...</div>
     </div>
@@ -181,8 +211,11 @@
 
   <script>
     const spikes = []
+    const watching = new Set()
     let expandedId = null
+    let clipTotal = 0
 
+    // SSE
     const sse = new EventSource('/alerts')
     sse.onmessage = (e) => {
       const data = JSON.parse(e.data)
@@ -191,8 +224,10 @@
         document.getElementById('statusText').textContent = 'live'
       }
       if (data.type === 'spike') {
-        const id = Date.now() + Math.random()
-        spikes.unshift({ ...data, id, receivedAt: Date.now(), mood: null, description: null, chatSnapshot: null })
+        // Only show spikes from channels we're watching (or show all if none watched)
+        if (watching.size > 0 && !watching.has(data.channel.toLowerCase())) return
+        const id = Date.now() + '' + Math.random()
+        spikes.unshift({ ...data, id, receivedAt: Date.now(), mood: null, description: null, chatSnapshot: null, clipUrl: null, momentId: null })
         if (spikes.length > 50) spikes.pop()
         renderSpikes()
       }
@@ -202,67 +237,92 @@
       document.getElementById('statusText').textContent = 'disconnected'
     }
 
+    function addWatch() {
+      const input = document.getElementById('channelInput')
+      const ch = input.value.trim().toLowerCase()
+      if (!ch || watching.has(ch)) return
+      watching.add(ch)
+      input.value = ''
+      renderWatchTags()
+    }
+
+    function removeWatch(ch) {
+      watching.delete(ch)
+      renderWatchTags()
+    }
+
+    function renderWatchTags() {
+      const el = document.getElementById('watchingTags')
+      el.innerHTML = [...watching].map(ch => `
+        <div class="watch-tag">
+          ${ch}
+          <span class="remove" onclick="removeWatch('${ch}')">&times;</span>
+        </div>
+      `).join('')
+    }
+
     function renderSpikes() {
       const el = document.getElementById('spikesList')
       document.getElementById('spikeCount').textContent = spikes.length
+      document.getElementById('clipCount').textContent = clipTotal
       if (spikes.length === 0) {
-        el.innerHTML = '<div class="empty">waiting for spikes...</div>'
+        el.innerHTML = '<div class="empty"><span class="pulse">add a channel to start watching</span></div>'
         return
       }
       el.innerHTML = spikes.map(s => {
-        const jumpClass = s.jumpPercent > 150 ? 'mega' : s.jumpPercent > 80 ? 'high' : ''
+        const jumpClass = s.jumpPercent > 150 ? 'mega' : s.jumpPercent > 50 ? 'high' : ''
         const ago = timeAgo(s.receivedAt)
         const moodTag = s.mood || s.vibe
         const isOpen = expandedId === s.id
+        const isWatched = watching.has(s.channel.toLowerCase())
         return `
-          <div class="spike-row ${s.clipWorthy ? 'clip-worthy' : ''} ${isOpen ? 'expanded' : ''}" onclick="toggleSpike('${s.id}')">
+          <div class="spike-row ${s.clipUrl ? 'has-clip' : ''}" onclick="toggleSpike('${s.id}')">
             <div class="channel-col">
               <span class="channel-name">${s.channel}</span>
               ${s.viewers ? `<span class="viewers">${(s.viewers/1000).toFixed(1)}k</span>` : ''}
             </div>
             <span class="jump ${jumpClass}">+${s.jumpPercent}%</span>
             <span class="vibe-tag ${moodTag}">${moodTag}</span>
-            <span>${s.description ? '<span style="color:#555;font-size:10px">ai</span>' : ''}</span>
+            <span class="desc-col">${s.description || ''}</span>
             ${s.vodUrl ? `<a class="vod-link" href="${s.vodUrl}" target="_blank" onclick="event.stopPropagation()">${s.vodTimestamp}</a>` : '<span class="vod-link">-</span>'}
             <span class="time-col">${ago}</span>
           </div>
           <div class="spike-detail ${isOpen ? 'open' : ''}" id="detail-${s.id}">
-            ${s.description ? `<div class="detail-description"><em>${s.mood}</em> — ${s.description}</div>` : ''}
-            <div style="display:flex;gap:8px;margin-bottom:8px">
-              ${!s.description ? `<button class="classify-btn" id="btn-${s.id}" onclick="event.stopPropagation(); classifyMoment('${s.id}')">classify with ai</button>` : ''}
-              ${s.clipUrl ? `<a class="classify-btn" href="${s.clipUrl}" target="_blank" style="text-decoration:none;display:inline-block;color:#22c55e;border-color:#22c55e44" onclick="event.stopPropagation()">clip</a>` : ''}
-              ${s.momentId ? `<a class="classify-btn" href="/clip/${s.momentId}" target="_blank" style="text-decoration:none;display:inline-block" onclick="event.stopPropagation()">watch</a>` : ''}
+            <div class="detail-top">
+              ${s.clipUrl ? `<a class="clip-link" href="${s.clipUrl}" target="_blank" onclick="event.stopPropagation()">clip</a>` : ''}
+              ${s.vodUrl ? `<a href="${s.vodUrl}" target="_blank" onclick="event.stopPropagation()">vod</a>` : ''}
+              ${!isWatched ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();document.getElementById('channelInput').value='${s.channel}';addWatch()">+ watch</a>` : ''}
             </div>
+            ${s.description ? `<div class="detail-desc"><b>${s.mood}</b> — ${s.description}</div>` : ''}
             ${s.chatSnapshot ? `
               <div class="chat-snapshot">
-                ${s.chatSnapshot.map(m => {
+                ${s.chatSnapshot.slice(0, 15).map(m => {
                   const idx = m.indexOf(': ')
-                  if (idx === -1) return `<div><span class="chat-msg">${esc(m)}</span></div>`
-                  return `<div><span class="chat-user">${esc(m.slice(0, idx))}:</span> <span class="chat-msg">${esc(m.slice(idx+2))}</span></div>`
+                  return idx > -1
+                    ? `<div><span class="u">${esc(m.slice(0,idx))}:</span> ${esc(m.slice(idx+2))}</div>`
+                    : `<div>${esc(m)}</div>`
                 }).join('')}
               </div>
-            ` : '<div style="color:#333;font-size:11px">loading chat...</div>'}
+            ` : (isWatched ? '<div style="color:#333;font-size:11px">loading...</div>' : '')}
           </div>
         `
       }).join('')
     }
 
     async function toggleSpike(id) {
-      if (expandedId === id) {
-        expandedId = null
-      } else {
+      if (expandedId === id) { expandedId = null }
+      else {
         expandedId = id
-        // Try to load chat snapshot from moments API if we don't have it
-        const spike = spikes.find(s => String(s.id) === String(id))
+        const spike = spikes.find(s => s.id === id)
         if (spike && !spike.chatSnapshot) {
           try {
             const res = await fetch(`/moments/latest/${spike.channel}`)
             if (res.ok) {
-              const moment = await res.json()
-              spike.chatSnapshot = moment.chatSnapshot || []
-              spike.momentId = moment.id
-              spike.clipUrl = moment.clipUrl || null
-              if (moment.mood) { spike.mood = moment.mood; spike.description = moment.description }
+              const m = await res.json()
+              spike.chatSnapshot = m.chatSnapshot || []
+              spike.momentId = m.id
+              spike.clipUrl = m.clipUrl || null
+              if (m.mood && m.mood !== 'error') { spike.mood = m.mood; spike.description = m.description }
             }
           } catch {}
         }
@@ -270,27 +330,7 @@
       renderSpikes()
     }
 
-    async function classifyMoment(id) {
-      const spike = spikes.find(s => String(s.id) === String(id))
-      if (!spike || !spike.momentId) return
-      const btn = document.getElementById(`btn-${id}`)
-      if (btn) { btn.disabled = true; btn.textContent = 'classifying...' }
-      try {
-        const res = await fetch(`/moments/${spike.momentId}/classify`)
-        if (res.ok) {
-          const data = await res.json()
-          spike.mood = data.mood
-          spike.description = data.description
-        }
-      } catch {}
-      renderSpikes()
-    }
-
-    function esc(s) {
-      const d = document.createElement('div')
-      d.textContent = s
-      return d.innerHTML
-    }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
 
     function timeAgo(ts) {
       const s = Math.floor((Date.now() - ts) / 1000)
@@ -301,38 +341,33 @@
 
     async function refreshHealth() {
       try {
-        const res = await fetch('/health')
-        const health = await res.json()
-        document.getElementById('channelCount').textContent = health.totalChannels.toLocaleString()
-        document.getElementById('msgRate').textContent = health.totalMsgsPerSec.toFixed(0)
-        document.getElementById('statusDot').className = 'dot ' + (health.connected ? 'live' : 'off')
-        document.getElementById('statusText').textContent = health.connected ? 'live' : 'disconnected'
+        const h = await fetch('/health').then(r => r.json())
+        document.getElementById('channelCount').textContent = h.totalChannels.toLocaleString()
+        document.getElementById('msgRate').textContent = h.totalMsgsPerSec.toFixed(0)
+        document.getElementById('statusDot').className = 'dot ' + (h.connected ? 'live' : 'off')
+        document.getElementById('statusText').textContent = h.connected ? 'live' : 'disconnected'
       } catch {}
     }
 
     async function refreshTrending() {
       try {
-        const res = await fetch('/trending')
-        const data = await res.json()
+        const data = await fetch('/trending').then(r => r.json())
         const el = document.getElementById('trendingGrid')
-        if (!data.channels || data.channels.length === 0) {
-          el.innerHTML = '<div class="empty">no active channels yet</div>'
-          return
-        }
+        if (!data.channels?.length) { el.innerHTML = '<div class="empty">no data yet</div>'; return }
         el.innerHTML = data.channels.map(ch => `
-          <div class="trending-card">
+          <div class="trending-card" onclick="document.getElementById('channelInput').value='${ch.channel}';addWatch()">
             <div class="channel-name">${ch.channel}</div>
             <div class="rate"><b>${ch.burst}</b> msg/s</div>
-            <div class="rate">baseline <b>${ch.baseline}</b></div>
             <span class="vibe-tag ${ch.vibe}">${ch.vibe}</span>
           </div>
         `).join('')
       } catch {}
     }
 
+
     setInterval(() => renderSpikes(), 10000)
     setInterval(refreshHealth, 5000)
-    setInterval(refreshTrending, 10000)
+    setInterval(refreshTrending, 15000)
     refreshHealth()
     refreshTrending()
   </script>
