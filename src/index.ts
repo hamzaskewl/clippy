@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url'
 import { Mppx, tempo } from 'mppx/express'
 import { createClient, http } from 'viem'
 import { tempo as tempoChain } from 'viem/chains'
-import { connectFirehose, getTrending, getChannel, getSpikes, getStats, isConnected, getVodTimestamp, onSpike, getViewerCount } from './firehose.js'
+import { connectFirehose, getTrending, getChannel, getSpikes, getStats, isConnected, getVodTimestamp, onSpike, getViewerCount, setActiveChannel, removeActiveChannel } from './firehose.js'
 import { summarizeChannel, classifySpike } from './summarize.js'
 import { startMomentCapture, getMoments, getMomentById, watchChannel, unwatchChannel, getWatchedChannels } from './moments.js'
 import { setTwitchAuth, getTwitchAuth, createClip } from './clip.js'
@@ -228,6 +228,33 @@ app.delete('/watch-clip/:channel', (req, res) => {
 
 app.get('/watch-clip', (_req, res) => {
   res.json({ watching: getWatchedChannels() })
+})
+
+// --- Channel stats (free, for dashboard live display) ---
+app.get('/channel-stats/:name', (req, res) => {
+  const data = getChannel(req.params.name)
+  if (!data) return res.status(404).json({ error: 'Not found' })
+  res.json({
+    channel: data.channel,
+    burst: data.burst,
+    sustained: data.sustained,
+    baseline: data.baseline,
+    jumpPercent: data.jumpPercent,
+    isSpike: data.isSpike,
+    vibe: data.vibe,
+    viewers: null, // filled async if needed
+  })
+})
+
+// --- Track channels (lightweight, just rate tracking for dashboard) ---
+app.post('/track/:channel', (req, res) => {
+  setActiveChannel(req.params.channel)
+  res.json({ tracking: req.params.channel })
+})
+
+app.delete('/track/:channel', (req, res) => {
+  removeActiveChannel(req.params.channel)
+  res.json({ removed: req.params.channel })
 })
 
 // --- Trending (free for dashboard, top 10 only) ---

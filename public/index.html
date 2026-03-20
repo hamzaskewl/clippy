@@ -195,6 +195,11 @@
     </div>
   </div>
 
+  <section id="channelStatsSection" style="display:none">
+    <h2>watching</h2>
+    <div id="channelStats" class="trending-grid"></div>
+  </section>
+
   <section>
     <h2>live spikes</h2>
     <div class="spikes-list" id="spikesList">
@@ -237,18 +242,24 @@
       document.getElementById('statusText').textContent = 'disconnected'
     }
 
-    function addWatch() {
-      const input = document.getElementById('channelInput')
-      const ch = input.value.trim().toLowerCase()
+    async function addWatch(ch) {
+      if (!ch) {
+        const input = document.getElementById('channelInput')
+        ch = input.value.trim().toLowerCase()
+        input.value = ''
+      }
       if (!ch || watching.has(ch)) return
       watching.add(ch)
-      input.value = ''
+      fetch(`/track/${ch}`, { method: 'POST' })
       renderWatchTags()
+      refreshChannelStats()
     }
 
     function removeWatch(ch) {
       watching.delete(ch)
+      fetch(`/track/${ch}`, { method: 'DELETE' })
       renderWatchTags()
+      refreshChannelStats()
     }
 
     function renderWatchTags() {
@@ -266,7 +277,11 @@
       document.getElementById('spikeCount').textContent = spikes.length
       document.getElementById('clipCount').textContent = clipTotal
       if (spikes.length === 0) {
-        el.innerHTML = '<div class="empty"><span class="pulse">add a channel to start watching</span></div>'
+        if (watching.size === 0) {
+          el.innerHTML = '<div class="empty"><span class="pulse">add a channel to start watching</span></div>'
+        } else {
+          el.innerHTML = `<div class="empty"><span class="pulse">watching ${[...watching].join(', ')} for spikes...</span></div>`
+        }
         return
       }
       el.innerHTML = spikes.map(s => {
@@ -355,7 +370,7 @@
         const el = document.getElementById('trendingGrid')
         if (!data.channels?.length) { el.innerHTML = '<div class="empty">no data yet</div>'; return }
         el.innerHTML = data.channels.map(ch => `
-          <div class="trending-card" onclick="document.getElementById('channelInput').value='${ch.channel}';addWatch()">
+          <div class="trending-card" onclick="addWatch('${ch.channel}')">
             <div class="channel-name">${ch.channel}</div>
             <div class="rate"><b>${ch.burst}</b> msg/s</div>
             <span class="vibe-tag ${ch.vibe}">${ch.vibe}</span>
@@ -365,9 +380,33 @@
     }
 
 
+    async function refreshChannelStats() {
+      const section = document.getElementById('channelStatsSection')
+      const el = document.getElementById('channelStats')
+      if (watching.size === 0) { section.style.display = 'none'; return }
+      section.style.display = 'block'
+
+      const cards = await Promise.all([...watching].map(async ch => {
+        try {
+          const res = await fetch(`/channel-stats/${ch}`)
+          if (!res.ok) return `<div class="trending-card"><div class="channel-name">${ch}</div><div class="rate" style="color:#333">warming up...</div></div>`
+          const d = await res.json()
+          return `
+            <div class="trending-card">
+              <div class="channel-name">${ch} ${d.viewers ? `<span style="color:#444;font-size:10px">${(d.viewers/1000).toFixed(1)}k</span>` : ''}</div>
+              <div class="rate"><b>${d.burst}</b> msg/s</div>
+              <div class="rate">baseline <b>${d.baseline}</b></div>
+              <span class="vibe-tag ${d.vibe}">${d.vibe}</span>
+            </div>`
+        } catch { return `<div class="trending-card"><div class="channel-name">${ch}</div><div class="rate" style="color:#333">connecting...</div></div>` }
+      }))
+      el.innerHTML = cards.join('')
+    }
+
     setInterval(() => renderSpikes(), 10000)
     setInterval(refreshHealth, 5000)
     setInterval(refreshTrending, 15000)
+    setInterval(refreshChannelStats, 3000)
     refreshHealth()
     refreshTrending()
   </script>
