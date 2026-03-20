@@ -1,4 +1,4 @@
-import { onSpike, getRecentMessages, getVodTimestamp } from './firehose.js'
+import { onSpike, getRecentMessages, getVodTimestamp, setActiveChannel, removeActiveChannel } from './firehose.js'
 import { classifySpike } from './summarize.js'
 import { createClip, hasTwitchAuth } from './clip.js'
 
@@ -34,11 +34,13 @@ const watchedChannels = new Set<string>()
 
 export function watchChannel(channel: string) {
   watchedChannels.add(channel.toLowerCase())
+  setActiveChannel(channel)
   console.log(`[watch] Now clipping: ${channel}`)
 }
 
 export function unwatchChannel(channel: string) {
   watchedChannels.delete(channel.toLowerCase())
+  removeActiveChannel(channel)
 }
 
 export function getWatchedChannels() {

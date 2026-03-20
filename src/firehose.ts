@@ -100,6 +100,12 @@ const channels = new Map<string, ChannelState>()
 let totalMsgsPerSec = 0
 let connected = false
 
+// Channels that get full tracking (set by moments.ts watchlist)
+const activeChannels = new Set<string>()
+export function setActiveChannel(name: string) { activeChannels.add(name.toLowerCase()) }
+export function removeActiveChannel(name: string) { activeChannels.delete(name.toLowerCase()) }
+export function isActiveChannel(name: string) { return activeChannels.has(name.toLowerCase()) }
+
 function getOrCreateChannel(name: string): ChannelState {
   let state = channels.get(name)
   if (!state) {
@@ -123,20 +129,49 @@ function getOrCreateChannel(name: string): ChannelState {
 }
 
 function processMessage(msg: ChatMessage) {
+  const isActive = activeChannels.has(msg.channel.toLowerCase())
+
+  // Non-active channels: only track message timestamps for rate (no storage)
+  if (!isActive) {
+    let state = channels.get(msg.channel)
+    if (!state) {
+      state = {
+        name: msg.channel,
+        messageTimes: [],
+        recentMessages: [],
+        baseline: 0,
+        burst: 0,
+        sustained: 0,
+        rateSamples: [],
+        sampleCount: 0,
+        firstSeen: Date.now(),
+        lastSpikeAt: null,
+        peakRate: 0,
+        vibeWindow: [],
+      }
+      channels.set(msg.channel, state)
+    }
+    state.messageTimes.push(Date.now())
+    // Keep timestamps lean — only last 30s
+    if (state.messageTimes.length > 300) {
+      state.messageTimes = state.messageTimes.slice(-100)
+    }
+    return
+  }
+
+  // Active channels: full tracking
   const state = getOrCreateChannel(msg.channel)
   const now = Date.now()
 
   state.messageTimes.push(now)
   state.recentMessages.push(msg)
 
-  // Score vibes
   const scores = scoreMessage(msg.text)
   const hasVibe = scores.funny + scores.hype + scores.awkward + scores.win + scores.loss > 0
   if (hasVibe) {
     state.vibeWindow.push({ time: now, scores })
   }
 
-  // Keep only last 200 messages
   if (state.recentMessages.length > 200) {
     state.recentMessages.shift()
   }
@@ -150,7 +185,18 @@ setInterval(() => {
   let totalRate = 0
 
   for (const [name, state] of channels) {
-    // Remove timestamps older than 2 min
+    const isActive = activeChannels.has(name.toLowerCase())
+
+    // Clean up dead non-active channels aggressively
+    if (!isActive) {
+      state.messageTimes = state.messageTimes.filter(t => t > cutoff)
+      if (state.messageTimes.length === 0) {
+        channels.delete(name)
+      }
+      continue
+    }
+
+    // Active channels: full processing
     state.messageTimes = state.messageTimes.filter(t => t > cutoff)
 
     // 5s burst rate — instant reaction
