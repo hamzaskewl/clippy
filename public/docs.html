@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>clippy — docs</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 24px;
+      max-width: 720px;
+      margin: 0 auto;
+      line-height: 1.7;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 40px;
+      border-bottom: 1px solid #1a1a1a;
+      padding-bottom: 16px;
+    }
+    h1 { font-size: 16px; font-weight: 500; }
+    h1 a { color: #e0e0e0; text-decoration: none; }
+    h1 a:hover { color: #fff; }
+    nav a { font-size: 12px; color: #555; text-decoration: none; margin-left: 16px; }
+    nav a:hover { color: #fff; }
+    nav a.active { color: #fff; }
+    h2 { font-size: 14px; font-weight: 600; color: #fff; margin: 32px 0 12px; }
+    h3 { font-size: 12px; font-weight: 500; color: #888; margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 1px; }
+    p { font-size: 13px; color: #888; margin-bottom: 12px; }
+    .hero { margin-bottom: 40px; }
+    .hero p { font-size: 14px; color: #999; }
+    .hero .tagline { font-size: 13px; color: #555; margin-top: 4px; }
+    code {
+      font-family: inherit;
+      background: #141414;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+      color: #ccc;
+    }
+    pre {
+      background: #111;
+      border: 1px solid #1a1a1a;
+      border-radius: 4px;
+      padding: 16px;
+      margin: 8px 0 16px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #aaa;
+    }
+    pre .comment { color: #444; }
+    pre .key { color: #7dd3fc; }
+    pre .str { color: #86efac; }
+    pre .num { color: #fbbf24; }
+    .endpoint {
+      display: grid;
+      grid-template-columns: 100px 1fr auto;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #111;
+      border: 1px solid #161616;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-bottom: 4px;
+      align-items: center;
+    }
+    .method { font-weight: 600; color: #fff; }
+    .method.get { color: #22c55e; }
+    .method.post { color: #38bdf8; }
+    .path { color: #ccc; }
+    .price { color: #555; text-align: right; }
+    .price.free { color: #22c55e; }
+    .price.session { color: #c084fc; }
+    .section-divider { border: none; border-top: 1px solid #1a1a1a; margin: 40px 0; }
+    .flow-step {
+      display: flex; gap: 12px; margin-bottom: 12px;
+      font-size: 12px; color: #888;
+    }
+    .flow-num {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: #1a1a1a; color: #666;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; flex-shrink: 0;
+    }
+    .tag {
+      display: inline-block; font-size: 10px; padding: 2px 6px;
+      border-radius: 3px; margin-right: 4px;
+    }
+    .tag.mpp { background: #1a0a1a; color: #c084fc; }
+    .tag.twitch { background: #0a0a1a; color: #a78bfa; }
+    .tag.llm { background: #1a1a0a; color: #fbbf24; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><a href="/">clippy</a></h1>
+    <nav>
+      <a href="/">dashboard</a>
+      <a href="/docs.html" class="active">docs</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <p>Real-time Twitch stream intelligence. Detects chat spikes, classifies moments with AI, and auto-clips highlights.</p>
+    <p class="tagline">Pay-per-use via MPP. No API keys needed.</p>
+  </div>
+
+  <h2>How it works</h2>
+
+  <div class="flow-step">
+    <div class="flow-num">1</div>
+    <div>Firehose ingests chat from <b style="color:#ccc">5,000+</b> Twitch channels in real-time via websocket</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">2</div>
+    <div>Per-channel rate tracking (5s burst window, 2-min baseline). Spike = burst &gt; 80% above baseline + 3k viewers + live</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">3</div>
+    <div><span class="tag llm">LLM</span> On watched channels, Anthropic classifies the mood and decides if it's clip-worthy</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">4</div>
+    <div><span class="tag twitch">Twitch</span> If clip-worthy, auto-creates a Twitch clip within seconds of the moment</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">5</div>
+    <div><span class="tag mpp">MPP</span> All paid endpoints use Tempo MPP — agents pay with USDC, no API keys</div>
+  </div>
+
+  <hr class="section-divider">
+
+  <h2>API endpoints</h2>
+
+  <h3>Free</h3>
+  <div class="endpoint"><span class="method get">GET</span> <span class="path">/</span> <span class="price free">free</span></div>
+  <div class="endpoint"><span class="method get">GET</span> <span class="path">/health</span> <span class="price free">free</span></div>
+  <div class="endpoint"><span class="method get">GET</span> <span class="path">/trending</span> <span class="price free">free</span></div>
+  <div class="endpoint"><span class="method get">GET</span> <span class="path">/alerts</span> <span class="price free">free SSE</span></div>
+  <div class="endpoint"><span class="method get">GET</span> <span class="path">/moments/:id</span> <span class="price free">free</span></div>
+
+  <h3>Charge (one-off payment)</h3>
+  <div class="endpoint"><span class="method post">POST</span> <span class="path">/trending</span> <span class="price">$0.001</span></div>
+  <div class="endpoint"><span class="method post">POST</span> <span class="path">/channel</span> <span class="price">$0.001</span></div>
+  <div class="endpoint"><span class="method post">POST</span> <span class="path">/spikes</span> <span class="price">$0.002</span></div>
+  <div class="endpoint"><span class="method post">POST</span> <span class="path">/summarize</span> <span class="price">$0.01</span></div>
+  <div class="endpoint"><span class="method post">POST</span> <span class="path">/moments</span> <span class="price">$0.001</span></div>
+
+  <h3>Session (streaming payment)</h3>
+  <div class="endpoint"><span class="method post">POST</span> <span class="path">/watch/:channel</span> <span class="price session">$0.001/spike</span></div>
+
+  <hr class="section-divider">
+
+  <h2>For agents</h2>
+  <p>Any agent with a Tempo wallet can use clippy. No API keys, no signup.</p>
+
+  <h3>Install tempo CLI</h3>
+  <pre>curl -fsSL https://tempo.xyz/install.sh | sh
+tempo wallet login</pre>
+
+  <h3>Browse what's hot</h3>
+  <pre><span class="comment"># Free — no payment needed</span>
+tempo request https://clippy.example/trending</pre>
+
+  <h3>Get channel stats (paid)</h3>
+  <pre><span class="comment"># Pays $0.001 automatically via MPP</span>
+tempo request -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"channel": "xqc"}' \
+  https://clippy.example/channel</pre>
+
+  <h3>Watch for spikes (session)</h3>
+  <pre><span class="comment"># Opens payment channel, $0.001 per spike</span>
+<span class="comment"># LLM classifies mood + auto-clips if worthy</span>
+tempo request -X POST \
+  https://clippy.example/watch/jynxzi</pre>
+
+  <h3>Example spike response</h3>
+  <pre>{
+  <span class="key">"channel"</span>: <span class="str">"jynxzi"</span>,
+  <span class="key">"viewers"</span>: <span class="num">18500</span>,
+  <span class="key">"burst"</span>: <span class="num">14.2</span>,
+  <span class="key">"baseline"</span>: <span class="num">7.1</span>,
+  <span class="key">"jumpPercent"</span>: <span class="num">107</span>,
+  <span class="key">"mood"</span>: <span class="str">"funny"</span>,
+  <span class="key">"description"</span>: <span class="str">"Chat spammed SON after streamer showed off their skinny arms"</span>,
+  <span class="key">"clipWorthy"</span>: <span class="num">true</span>,
+  <span class="key">"clipUrl"</span>: <span class="str">"https://clips.twitch.tv/WonderfulDifficultDragonfruitBIRB-..."</span>,
+  <span class="key">"vodUrl"</span>: <span class="str">"https://twitch.tv/jynxzi?t=2h19m19s"</span>
+}</pre>
+
+  <hr class="section-divider">
+
+  <h2>From the website</h2>
+  <p>No agent needed. Use clippy directly from the browser.</p>
+
+  <h3>1. Watch the dashboard</h3>
+  <p>The <a href="/" style="color:#ccc">dashboard</a> shows live spikes streaming in from all 5,000+ channels. Click any spike to see the chat snapshot and VOD link.</p>
+
+  <h3>2. Add channels to watch</h3>
+  <pre><span class="comment"># Add a channel to auto-clip watchlist</span>
+POST /watch-clip/jynxzi
+
+<span class="comment"># See what you're watching</span>
+GET /watch-clip
+
+<span class="comment"># Remove a channel</span>
+DELETE /watch-clip/jynxzi</pre>
+  <p>Watched channels get LLM-classified on every spike. Only clip-worthy moments get auto-clipped to Twitch.</p>
+
+  <h3>3. Classify any moment</h3>
+  <p>Click "classify with ai" on any spike in the dashboard, or hit the API:</p>
+  <pre>GET /moments/890/classify
+
+<span class="comment"># Returns:</span>
+{
+  <span class="key">"mood"</span>: <span class="str">"shock"</span>,
+  <span class="key">"description"</span>: <span class="str">"Streamer made a terrible decision that chat tried to stop"</span>,
+  <span class="key">"clipWorthy"</span>: <span class="num">true</span>
+}</pre>
+
+  <h3>4. Connect Twitch for auto-clipping</h3>
+  <p>Visit <code>/auth/twitch</code> to authorize clip creation. Once connected, watched channels auto-clip when the AI says a moment is worth it.</p>
+
+  <hr class="section-divider">
+
+  <h2>Payment flow</h2>
+  <p>Clippy uses <a href="https://tempo.xyz" style="color:#c084fc">Tempo MPP</a> for payments. Two models:</p>
+
+  <h3>Charge (one-off)</h3>
+  <p>Agent sends request → gets 402 → pays USDC → gets response. One transaction per request.</p>
+
+  <h3>Session (streaming)</h3>
+  <p>Agent deposits USDC into escrow → sends off-chain vouchers per request → unused deposit refunded on close. No on-chain tx after the initial deposit.</p>
+
+  <hr class="section-divider">
+
+  <h2>Stack</h2>
+  <p style="font-size:12px; color:#555;">
+    Twitch chat firehose &rarr; Node.js/Express &rarr; mppx (Tempo MPP) &rarr; Anthropic Claude (mood classification) &rarr; Twitch Helix API (auto-clip)
+  </p>
+  <p style="font-size:12px; color:#555;">
+    Deployed on Railway. Source on <a href="https://github.com/hamzaskewl/tempoproj" style="color:#666">GitHub</a>.
+  </p>
+
+</body>
+</html>
