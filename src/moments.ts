@@ -101,8 +101,8 @@ export function startMomentCapture() {
           moment.clipWorthy = result.clipWorthy
           console.log(`[moments] #${id} LLM: ${result.mood} / clipWorthy=${result.clipWorthy} — "${result.description}"`)
 
-          // Only clip if LLM says it's worth it
-          if (result.clipWorthy && hasTwitchAuth()) {
+          // Clip every spike on watched channels — let the clipper decide from the title
+          if (hasTwitchAuth()) {
             const clip = await createClip(spike.channel)
             if (clip) {
               moment.clipUrl = clip.clipUrl
@@ -111,15 +111,22 @@ export function startMomentCapture() {
             }
           }
         } else {
-          // LLM call failed — mark as error so UI doesn't say "not clip-worthy"
-          moment.mood = 'error'
-          moment.description = 'AI classification failed — retry later'
-          console.log(`[moments] #${id} classify returned null (LLM error)`)
+          console.log(`[moments] #${id} classify returned null — clipping anyway`)
         }
       } catch (err: any) {
-        moment.mood = 'error'
-        moment.description = 'AI classification failed — retry later'
         console.error(`[moments] #${id} classify failed:`, err.message)
+      }
+
+      // Always clip watched channels regardless of LLM result
+      if (hasTwitchAuth() && !moment.clipUrl) {
+        try {
+          const clip = await createClip(spike.channel)
+          if (clip) {
+            moment.clipUrl = clip.clipUrl
+            moment.clipId = clip.clipId
+            console.log(`[moments] #${id} clipped: ${clip.clipUrl}`)
+          }
+        } catch {}
       }
     }
 
