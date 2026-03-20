@@ -110,8 +110,15 @@ export function startMomentCapture() {
               console.log(`[moments] #${id} clipped: ${clip.clipUrl}`)
             }
           }
+        } else {
+          // LLM call failed — mark as error so UI doesn't say "not clip-worthy"
+          moment.mood = 'error'
+          moment.description = 'AI classification failed — retry later'
+          console.log(`[moments] #${id} classify returned null (LLM error)`)
         }
       } catch (err: any) {
+        moment.mood = 'error'
+        moment.description = 'AI classification failed — retry later'
         console.error(`[moments] #${id} classify failed:`, err.message)
       }
     }
