@@ -229,12 +229,16 @@
         document.getElementById('statusText').textContent = 'live'
       }
       if (data.type === 'spike') {
-        // Only show spikes from channels we're watching (or show all if none watched)
         if (watching.size > 0 && !watching.has(data.channel.toLowerCase())) return
         const id = Date.now() + '' + Math.random()
-        spikes.unshift({ ...data, id, receivedAt: Date.now(), mood: null, description: null, chatSnapshot: null, clipUrl: null, momentId: null })
+        spikes.unshift({ ...data, id, receivedAt: Date.now(), mood: null, description: null, chatSnapshot: data.chatSnapshot || null, clipUrl: null, momentId: null })
         if (spikes.length > 50) spikes.pop()
         renderSpikes()
+        // Fetch moment data after a few seconds (gives LLM + clip time to run)
+        if (watching.has(data.channel.toLowerCase())) {
+          setTimeout(() => fetchMoment(id, data.channel), 4000)
+          setTimeout(() => fetchMoment(id, data.channel), 10000)
+        }
       }
     }
     sse.onerror = () => {
@@ -322,6 +326,21 @@
           </div>
         `
       }).join('')
+    }
+
+    async function fetchMoment(spikeId, channel) {
+      const spike = spikes.find(s => s.id === spikeId)
+      if (!spike) return
+      try {
+        const res = await fetch(`/moments/latest/${channel}`)
+        if (!res.ok) return
+        const m = await res.json()
+        spike.momentId = m.id
+        if (m.clipUrl) { spike.clipUrl = m.clipUrl; clipTotal++ }
+        if (m.mood && m.mood !== 'error') { spike.mood = m.mood; spike.description = m.description }
+        if (m.chatSnapshot && m.chatSnapshot.length > (spike.chatSnapshot?.length || 0)) spike.chatSnapshot = m.chatSnapshot
+        renderSpikes()
+      } catch {}
     }
 
     async function toggleSpike(id) {

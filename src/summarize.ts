@@ -146,6 +146,10 @@ ${chatLog}`,
     })
 
     const result = await res.text()
+    if (!res.ok) {
+      console.error(`[classify] HTTP ${res.status}: ${result.substring(0, 200)}`)
+      return null
+    }
     const response = JSON.parse(result)
     const text = response.content?.[0]?.text || ''
 
