@@ -297,13 +297,13 @@
         }
       } catch {}
 
-      // Reset watching state for next spike
+      // Loop back to watching after 10s
       setTimeout(() => {
         setStep('watching', 'active', `<span class="waiting-pulse">monitoring ${watching} for next spike...</span>`)
         setStep('spike', 'step', 'waiting...')
         setStep('classify', 'step', 'waiting for spike...')
         setStep('clip', 'step', 'waiting...')
-      }, 30000)
+      }, 10000)
     }
 
     function showClassification(data, spike) {

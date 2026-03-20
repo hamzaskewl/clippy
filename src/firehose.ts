@@ -211,7 +211,7 @@ setInterval(() => {
           if (viewers === null || viewers < 3000) return // skip offline or small streams
 
           const vibes = getVibes(state)
-          const chatSnapshot = state.recentMessages.slice(-30).map(m => `${m.displayName}: ${m.text}`)
+          const chatSnapshot = state.recentMessages.slice(-50).map(m => `${m.displayName}: ${m.text}`)
           const spike = {
             channel: channelName,
             spikeAt: now,

@@ -61,7 +61,7 @@ export function startMomentCapture() {
     if (spike.jumpPercent < 40) return
 
     const id = nextId++
-    const chatSnapshot = getRecentMessages(spike.channel, 30)
+    const chatSnapshot = getRecentMessages(spike.channel, 50)
     const isWatched = watchedChannels.has(spike.channel.toLowerCase())
 
     const moment: Moment = {
