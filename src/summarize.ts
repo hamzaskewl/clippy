@@ -13,7 +13,7 @@ const mppClient = Mppx.create({
   methods: [
     tempo({
       account,
-      maxDeposit: '0.50',
+      maxDeposit: '0.10',
       walletClient: createWalletClient({
         account,
         chain: tempoChain,
