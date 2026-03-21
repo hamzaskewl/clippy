@@ -277,23 +277,26 @@
           }
 
           // Check for clip
-          setTimeout(async () => {
-            const freshRes = await fetch(`/moments/latest/${spike.channel}`)
-            if (freshRes.ok) {
-              const fresh = await freshRes.json()
-              if (fresh.clipUrl) {
-                setStep('clip', 'done', `
-                  <a class="clip-link" href="${fresh.clipUrl}" target="_blank">${fresh.clipUrl}</a>
-                  <div class="clip-embed">
-                    <iframe src="${fresh.clipUrl.replace('clips.twitch.tv', 'clips.twitch.tv/embed')}?parent=${location.hostname}&autoplay=true&muted=true" allowfullscreen></iframe>
-                  </div>
-                `)
-                addHistory(fresh)
-              } else if (fresh.clipWorthy === false) {
-                setStep('clip', 'done', 'AI says not clip-worthy — skipped')
+          // Check for clip at 3s, 8s, 15s (clip creation takes a moment)
+          for (const delay of [3000, 8000, 15000]) {
+            setTimeout(async () => {
+              const freshRes = await fetch(`/moments/latest/${spike.channel}`)
+              if (freshRes.ok) {
+                const fresh = await freshRes.json()
+                if (fresh.clipUrl) {
+                  setStep('clip', 'done', `
+                    <a class="clip-link" href="${fresh.clipUrl}" target="_blank">${fresh.clipUrl}</a>
+                    <div class="clip-embed">
+                      <iframe src="${fresh.clipUrl.replace('clips.twitch.tv', 'clips.twitch.tv/embed')}?parent=${location.hostname}&autoplay=true&muted=true" allowfullscreen></iframe>
+                    </div>
+                  `)
+                  addHistory(fresh)
+                } else if (delay === 15000) {
+                  setStep('clip', 'done', 'clip pending — check back shortly')
+                }
               }
-            }
-          }, 3000)
+            }, delay)
+          }
         }
       } catch {}
 
@@ -309,19 +312,13 @@
     function showClassification(data, spike) {
       const mood = data.mood || spike.vibe
       const desc = data.description || ''
-      const worthy = data.clipWorthy
 
       setStep('classify', 'done', `
         <span class="mood-tag ${mood}">${mood}</span>
         ${desc ? `<span style="color:#999">${desc}</span>` : ''}
-        <div class="sub">${worthy ? 'clip-worthy — creating clip...' : 'not clip-worthy — skipping clip'}</div>
       `)
 
-      if (worthy) {
-        setStep('clip', 'active', 'creating twitch clip...')
-      } else {
-        setStep('clip', 'done', 'AI says not clip-worthy — skipped')
-      }
+      setStep('clip', 'active', 'creating twitch clip...')
     }
 
     function addHistory(moment) {
