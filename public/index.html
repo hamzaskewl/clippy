@@ -242,7 +242,6 @@
       <div class="logo">clippy</div>
       <nav id="navLinks">
         <a href="/" class="active">dashboard</a>
-        <a href="/docs.html">docs</a>
       </nav>
     </div>
     <div class="topbar-right">
@@ -367,6 +366,7 @@
       if (!ch || watching.has(ch)) return
       watching.add(ch)
       fetch(`/track/${ch}`, { method: 'POST' })
+      fetch(`/watch-clip/${ch}`, { method: 'POST' })
       renderWatchTags()
       refreshChannelStats()
     }
@@ -374,6 +374,7 @@
     function removeWatch(ch) {
       watching.delete(ch)
       fetch(`/track/${ch}`, { method: 'DELETE' })
+      fetch(`/watch-clip/${ch}`, { method: 'DELETE' })
       renderWatchTags()
       refreshChannelStats()
     }
