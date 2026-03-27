@@ -128,7 +128,17 @@ function getOrCreateChannel(name: string): ChannelState {
   return state
 }
 
+// Filter out gifted sub messages — they spike chat artificially
+const GIFT_SUB_PATTERN = /gifted a (Tier \d |)sub to |is gifting \d+ (Tier \d )?sub|gifted \d+ (Tier \d )?subs? /i
+
+function isGiftSubMessage(text: string): boolean {
+  return GIFT_SUB_PATTERN.test(text)
+}
+
 function processMessage(msg: ChatMessage) {
+  // Skip gifted sub messages entirely — they inflate rates artificially
+  if (isGiftSubMessage(msg.text)) return
+
   const isActive = activeChannels.has(msg.channel.toLowerCase())
 
   // Non-active channels: only track message timestamps for rate (no storage)
@@ -422,7 +432,9 @@ export function getSpikes(withinMinutes = 5) {
 export function getRecentMessages(channelName: string, limit = 100): string[] {
   const state = channels.get(channelName) || channels.get(channelName.toLowerCase())
   if (!state) return []
-  return state.recentMessages.slice(-limit).map(m => `${m.displayName}: ${m.text}`)
+  return state.recentMessages.slice(-limit)
+    .filter(m => !isGiftSubMessage(m.text))
+    .map(m => `${m.displayName}: ${m.text}`)
 }
 
 // Twitch viewer count cache

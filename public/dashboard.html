@@ -104,10 +104,11 @@
       margin-bottom: 8px;
     }
     .slot-name { font-size: 14px; font-weight: 600; color: #fff; }
-    .slot-actions { display: flex; gap: 6px; }
+    .slot-actions { display: flex; align-items: center; gap: 8px; }
     .slot-btn {
       background: #1a1a1a; color: #666; border: 1px solid #222; border-radius: 4px;
-      padding: 4px 10px; font-family: inherit; font-size: 10px; cursor: pointer;
+      padding: 5px 12px; font-family: inherit; font-size: 10px; cursor: pointer;
+      line-height: 1; white-space: nowrap;
     }
     .slot-btn:hover { background: #222; color: #999; }
     .slot-btn.confirm-btn { color: #22c55e; border-color: #22c55e44; }
@@ -390,6 +391,7 @@
       setInterval(loadChannels, 30000) // refresh slots periodically
       refreshHealth()
       refreshTrending()
+      loadRecentMoments()
     }
 
     // ─── Channel management ───
@@ -438,7 +440,7 @@
             <div class="slot-actions">
               ${!ch.confirmed
                 ? `<button class="slot-btn confirm-btn" onclick="confirmChannel('${ch.channel}')">confirm (must be live)</button>`
-                : `<span style="font-size:10px;color:#22c55e">confirmed</span>`
+                : `<span style="font-size:10px;color:#22c55e;line-height:1;padding:5px 0;display:inline-flex;align-items:center">confirmed</span>`
               }
               <button class="slot-btn remove-btn" onclick="removeChannel('${ch.channel}')">remove</button>
             </div>
@@ -661,6 +663,38 @@
       if (userChannels.some(c => c.channel === ch)) { showError(`Already watching ${ch}`); return }
       document.getElementById('channelInput').value = ch
       addChannel()
+    }
+
+    // ─── Load saved moments from DB ───
+    async function loadRecentMoments() {
+      if (userChannels.length === 0) return
+      for (const ch of userChannels) {
+        try {
+          const res = await fetch(`/moments/latest/${ch.channel}`)
+          if (!res.ok) continue
+          const m = await res.json()
+          // Don't duplicate if already in spikes from SSE
+          if (spikes.some(s => s.channel.toLowerCase() === m.channel.toLowerCase() && Math.abs(s.receivedAt - m.spikeAt) < 60000)) continue
+          spikes.push({
+            id: 'db-' + m.id,
+            channel: m.channel,
+            jumpPercent: m.jumpPercent,
+            viewers: null,
+            vibe: m.vibe,
+            mood: m.mood,
+            description: m.description,
+            chatSnapshot: m.chatSnapshot,
+            clipUrl: m.clipUrl,
+            vodUrl: m.vodUrl,
+            vodTimestamp: m.vodTimestamp,
+            receivedAt: m.spikeAt,
+            type: 'spike',
+          })
+        } catch {}
+      }
+      spikes.sort((a, b) => b.receivedAt - a.receivedAt)
+      if (spikes.length > 30) spikes.length = 30
+      renderSpikes()
     }
 
     // ─── Utilities ───
