@@ -170,10 +170,25 @@
     .toggle-switch.on .toggle-knob { left: 18px; background: #fff; }
 
     @media (max-width: 768px) {
-      .topbar { padding: 14px 16px; }
+      .topbar { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+      .topbar-left { gap: 12px; }
+      .topbar nav a { font-size: 11px; margin-left: 10px; }
+      .topbar-right { gap: 8px; }
       .container { padding: 20px 16px; }
       .clips-grid { grid-template-columns: 1fr; }
       .stats-bar { gap: 16px; flex-wrap: wrap; }
+      .page-btn { padding: 5px 8px; font-size: 10px; min-width: 28px; }
+      .stat-item .val { font-size: 22px; }
+    }
+    @media (max-width: 480px) {
+      .topbar { padding: 10px 12px; }
+      .topbar-left { gap: 8px; flex-wrap: wrap; }
+      .topbar nav a { font-size: 10px; margin-left: 8px; }
+      .logo { font-size: 13px; }
+      .container { padding: 16px 12px; }
+      .page-btn { padding: 4px 6px; font-size: 10px; min-width: 24px; }
+      .clip-info { padding: 10px 12px; }
+      .stat-item .val { font-size: 20px; }
     }
   </style>
 </head>

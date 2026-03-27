@@ -213,12 +213,31 @@
     @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
 
     @media (max-width: 768px) {
-      .topbar { padding: 14px 16px; }
+      .topbar { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+      .topbar-left { gap: 12px; }
+      .topbar nav a { font-size: 11px; margin-left: 10px; }
+      .topbar-right { gap: 8px; }
       .main { padding: 20px 16px; }
       .sidebar { padding: 20px 16px; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .spike-row { grid-template-columns: 1fr auto; }
       .spike-row .desc-col, .spike-row .time-col, .spike-row .viewers { display: none; }
+      .hero h1 { font-size: 17px; }
+      .hero p { font-size: 12px; }
+      .stat-card { padding: 14px; }
+      .stat-card .val { font-size: 22px; }
+    }
+    @media (max-width: 480px) {
+      .topbar { padding: 10px 12px; }
+      .topbar-left { gap: 8px; flex-wrap: wrap; }
+      .topbar nav a { font-size: 10px; margin-left: 8px; }
+      .logo { font-size: 13px; }
+      .status-pill { font-size: 10px; padding: 3px 8px; }
+      .auth-btn { padding: 5px 10px; font-size: 10px; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .stat-card .val { font-size: 20px; }
+      .main { padding: 16px 12px; }
+      .sidebar { padding: 16px 12px; }
     }
   </style>
 </head>

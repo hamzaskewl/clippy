@@ -262,11 +262,34 @@
     @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
 
     @media (max-width: 768px) {
-      .topbar { padding: 14px 16px; }
+      .topbar { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+      .topbar-left { gap: 12px; }
+      .topbar nav a { font-size: 11px; margin-left: 10px; }
+      .topbar-right { gap: 8px; }
       .main { padding: 20px 16px; }
       .sidebar { padding: 20px 16px; }
+      .add-bar { flex-direction: column; }
+      .add-bar input { width: 100%; }
+      .add-bar button { width: 100%; text-align: center; }
+      .slot-top { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .slot-actions { width: 100%; }
+      .free-banner { flex-wrap: wrap; }
       .spike-card { grid-template-columns: 1fr auto auto; }
       .spike-card .desc-col, .spike-card .time-col { display: none; }
+    }
+    @media (max-width: 480px) {
+      .topbar { padding: 10px 12px; }
+      .topbar-left { gap: 8px; flex-wrap: wrap; }
+      .topbar nav a { font-size: 10px; margin-left: 8px; }
+      .logo { font-size: 13px; }
+      .status-pill { font-size: 10px; padding: 3px 8px; }
+      .main { padding: 16px 12px; }
+      .sidebar { padding: 16px 12px; }
+      .free-banner { padding: 10px 12px; font-size: 10px; }
+      .spike-card { grid-template-columns: 1fr auto; }
+      .spike-card .vibe-tag { display: none; }
+      .slot-card { padding: 12px 14px; }
+      .slot-name { font-size: 13px; }
     }
   </style>
 </head>

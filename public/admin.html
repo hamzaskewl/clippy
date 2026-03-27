@@ -235,6 +235,33 @@
     .copy-btn.copied { border-color: #22c55e; color: #22c55e; }
 
     .empty-row td { color: #222; text-align: center; padding: 24px; }
+
+    @media (max-width: 768px) {
+      .topbar { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+      .topbar-left { gap: 12px; }
+      .topbar nav a { font-size: 11px; margin-left: 10px; }
+      .topbar-right { gap: 8px; }
+      .container { padding: 20px 16px; }
+      .invite-form { flex-direction: column; }
+      .invite-form input { width: 100%; }
+      .invite-form button { width: 100%; text-align: center; }
+      .uses-picker { flex-wrap: wrap; }
+      .table-wrap { -webkit-overflow-scrolling: touch; }
+      .card { padding: 16px; }
+      .stat-card { padding: 14px; }
+      .stat-value { font-size: 22px; }
+    }
+    @media (max-width: 480px) {
+      .topbar { padding: 10px 12px; }
+      .topbar-left { gap: 8px; flex-wrap: wrap; }
+      .topbar nav a { font-size: 10px; margin-left: 8px; }
+      .logo { font-size: 13px; }
+      .container { padding: 16px 12px; }
+      .invite-form { gap: 6px; }
+      .card { padding: 12px; }
+      .stat-value { font-size: 20px; }
+      th, td { padding: 6px 8px; font-size: 11px; }
+    }
   </style>
 </head>
 <body style="visibility:hidden">

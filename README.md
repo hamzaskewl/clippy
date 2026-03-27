@@ -6,6 +6,10 @@ Detects chat spikes, classifies moments with AI, clips highlights automatically.
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://typescriptlang.org) [![Twitch](https://img.shields.io/badge/Twitch-9146FF?logo=twitch&logoColor=white)](https://twitch.tv) [![Claude AI](https://img.shields.io/badge/Claude_AI-Haiku_4.5-orange)](https://anthropic.com)
 
+### Demo
+
+https://x.com/WWantep/status/2036900603087974480
+
 ---
 
 ## What is clippy?
