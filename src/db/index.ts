@@ -37,10 +37,22 @@ export async function initDatabase() {
         code TEXT PRIMARY KEY,
         created_by TEXT NOT NULL,
         label TEXT DEFAULT '',
-        used_by TEXT,
-        used_by_name TEXT,
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        used_at TIMESTAMP
+        max_uses INTEGER NOT NULL DEFAULT 1,
+        use_count INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `
+    // Migrate old invite_codes table if needed
+    try { await client`ALTER TABLE invite_codes ADD COLUMN IF NOT EXISTS max_uses INTEGER NOT NULL DEFAULT 1` } catch {}
+    try { await client`ALTER TABLE invite_codes ADD COLUMN IF NOT EXISTS use_count INTEGER NOT NULL DEFAULT 0` } catch {}
+
+    await client`
+      CREATE TABLE IF NOT EXISTS invite_code_uses (
+        id SERIAL PRIMARY KEY,
+        code TEXT NOT NULL,
+        used_by TEXT NOT NULL,
+        used_by_name TEXT NOT NULL,
+        used_at TIMESTAMP DEFAULT NOW() NOT NULL
       )
     `
     await client`
@@ -82,6 +94,21 @@ export async function initDatabase() {
         added_at TIMESTAMP DEFAULT NOW() NOT NULL
       )
     `
+
+    await client`
+      CREATE TABLE IF NOT EXISTS user_channels (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        added_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+        confirmed_at TIMESTAMP
+      )
+    `
+
+    // Add tos_accepted_at to users if missing
+    try { await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS tos_accepted_at TIMESTAMP` } catch {}
+
     console.log('[db] Tables initialized')
   } catch (err: any) {
     console.error('[db] Init error:', err.message)
