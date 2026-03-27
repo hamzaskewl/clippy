@@ -155,6 +155,30 @@
     }
     .invite-form button:hover { background: #7c3aed; }
 
+    .uses-picker {
+      display: flex; align-items: center; gap: 3px;
+    }
+    .uses-btn {
+      background: #0e0e0e; border: 1px solid #222; border-radius: 4px;
+      color: #555; font-family: inherit; font-size: 11px;
+      padding: 5px 8px; cursor: pointer; min-width: 28px; text-align: center;
+    }
+    .uses-btn:hover { border-color: #444; color: #999; }
+    .uses-btn.active { border-color: #9146ff; color: #9146ff; background: #1a0a2a; }
+
+    .uses-bar {
+      display: flex; align-items: center; gap: 4px; margin-top: 2px;
+    }
+    .uses-bar-fill {
+      height: 3px; border-radius: 2px; background: #222; flex: 1; overflow: hidden;
+    }
+    .uses-bar-fill .inner { height: 100%; border-radius: 2px; background: #9146ff; transition: width 0.2s; }
+    .uses-bar-fill .inner.full { background: #ef4444; }
+    .uses-text { font-size: 10px; color: #555; white-space: nowrap; }
+
+    .used-by-list { font-size: 10px; color: #555; line-height: 1.6; }
+    .used-by-list span { color: #888; }
+
     /* Tables */
     .table-wrap {
       overflow-x: auto;
@@ -255,12 +279,23 @@
           <div class="card-title">invite codes</div>
         </div>
         <div class="invite-form">
-          <input type="text" id="inviteLabel" placeholder="label (optional)">
+          <input type="text" id="inviteLabel" placeholder="label (optional)" style="flex:1">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-size:10px;color:#444;white-space:nowrap">uses:</span>
+            <div class="uses-picker" id="usesPicker">
+              <button class="uses-btn" onclick="pickUses(1)">1</button>
+              <button class="uses-btn active" onclick="pickUses(5)">5</button>
+              <button class="uses-btn" onclick="pickUses(10)">10</button>
+              <button class="uses-btn" onclick="pickUses(25)">25</button>
+              <button class="uses-btn" onclick="pickUses(100)">100</button>
+              <input type="number" id="customUses" placeholder="#" min="1" max="10000" style="width:48px;background:#0e0e0e;border:1px solid #222;border-radius:4px;color:#fff;font-family:inherit;font-size:11px;padding:4px 6px;text-align:center;outline:none" oninput="pickCustomUses()">
+            </div>
+          </div>
           <button onclick="createInvite()">generate</button>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>code</th><th>label</th><th>status</th><th>used by</th><th></th></tr></thead>
+            <thead><tr><th>code</th><th>label</th><th>uses</th><th>used by</th><th></th></tr></thead>
             <tbody id="inviteTable"><tr class="empty-row"><td colspan="5">loading...</td></tr></tbody>
           </table>
         </div>
@@ -329,15 +364,28 @@
           tbody.innerHTML = '<tr class="empty-row"><td colspan="5">no invite codes yet</td></tr>'
           return
         }
-        tbody.innerHTML = d.invites.map(i => `
-          <tr>
-            <td class="code-cell">${i.code}</td>
-            <td>${i.label || '-'}</td>
-            <td><span class="badge ${i.usedBy ? 'used' : 'available'}">${i.usedBy ? 'used' : 'available'}</span></td>
-            <td>${i.usedByName || '-'}</td>
-            <td>${!i.usedBy ? `<button class="copy-btn" onclick="copyCode(this, '${i.code}')">copy</button>` : ''}</td>
-          </tr>
-        `).join('')
+        tbody.innerHTML = d.invites.map(i => {
+          const exhausted = i.useCount >= i.maxUses
+          const pct = Math.min(100, (i.useCount / i.maxUses) * 100)
+          const usedByHtml = i.uses && i.uses.length > 0
+            ? `<div class="used-by-list">${i.uses.map(u => `<span>${esc(u.usedByName)}</span>`).join(', ')}</div>`
+            : '<span style="color:#333">—</span>'
+          return `
+            <tr>
+              <td class="code-cell">${i.code}</td>
+              <td>${esc(i.label || '-')}</td>
+              <td>
+                <div class="uses-bar">
+                  <div class="uses-bar-fill"><div class="inner ${exhausted ? 'full' : ''}" style="width:${pct}%"></div></div>
+                  <span class="uses-text">${i.useCount}/${i.maxUses}</span>
+                </div>
+                <span class="badge ${exhausted ? 'used' : 'available'}" style="margin-top:4px">${exhausted ? 'exhausted' : 'available'}</span>
+              </td>
+              <td>${usedByHtml}</td>
+              <td>${!exhausted ? `<button class="copy-btn" onclick="copyCode(this, '${i.code}')">copy</button>` : ''}</td>
+            </tr>
+          `
+        }).join('')
       } catch {}
     }
 
@@ -360,20 +408,42 @@
       } catch {}
     }
 
+    let selectedUses = 5
+
+    function pickUses(n) {
+      selectedUses = n
+      document.getElementById('customUses').value = ''
+      document.querySelectorAll('.uses-btn').forEach(b => b.classList.remove('active'))
+      const btns = document.querySelectorAll('.uses-btn')
+      btns.forEach(b => { if (b.textContent.trim() === String(n)) b.classList.add('active') })
+    }
+
+    function pickCustomUses() {
+      const v = parseInt(document.getElementById('customUses').value)
+      if (v > 0) {
+        selectedUses = Math.min(v, 10000)
+        document.querySelectorAll('.uses-btn').forEach(b => b.classList.remove('active'))
+      }
+    }
+
     async function createInvite() {
       const label = document.getElementById('inviteLabel').value.trim()
       try {
         const res = await fetch('/admin/invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label }),
+          body: JSON.stringify({ label, maxUses: selectedUses }),
         })
         if (res.ok) {
           document.getElementById('inviteLabel').value = ''
+          document.getElementById('customUses').value = ''
+          pickUses(5)
           await Promise.all([loadInvites(), loadStats()])
         }
       } catch {}
     }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
 
     function copyCode(btn, code) {
       navigator.clipboard.writeText(code).then(() => {
