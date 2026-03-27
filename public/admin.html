@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>clippy — admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    /* Top bar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 32px;
+      border-bottom: 1px solid #141414;
+      background: #0d0d0d;
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .topbar .logo { font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
+    .topbar nav a {
+      font-size: 12px; color: #444; text-decoration: none; margin-left: 16px;
+      padding: 4px 0; border-bottom: 2px solid transparent;
+    }
+    .topbar nav a:hover { color: #999; }
+    .topbar nav a.active { color: #e0e0e0; border-bottom-color: #9146ff; }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .topbar-right .user { font-size: 12px; color: #666; }
+    .topbar-right .avatar { width: 24px; height: 24px; border-radius: 50%; }
+    .topbar-right button {
+      background: none; border: 1px solid #222; color: #555; font-family: inherit;
+      font-size: 11px; padding: 4px 12px; border-radius: 4px; cursor: pointer;
+    }
+    .topbar-right button:hover { border-color: #444; color: #999; }
+
+    /* Layout */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+    .page-title {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 2px;
+      color: #444; margin-bottom: 24px;
+    }
+
+    /* Grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 900px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* Cards */
+    .card {
+      background: #111;
+      border: 1px solid #1a1a1a;
+      border-radius: 8px;
+      padding: 24px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #555;
+    }
+
+    /* Stats */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: #111;
+      border: 1px solid #1a1a1a;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .stat-value { font-size: 28px; font-weight: 700; color: #fff; }
+    .stat-label { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 1.2px; margin-top: 4px; }
+    .stat-sub { font-size: 11px; color: #333; margin-top: 2px; }
+
+    /* Budget bar */
+    .budget-bar {
+      width: 100%;
+      height: 8px;
+      background: #1a1a1a;
+      border-radius: 4px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+    .budget-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #22c55e, #f59e0b);
+      transition: width 0.3s;
+    }
+    .budget-fill.warn { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+    .budget-fill.danger { background: #ef4444; }
+
+    /* Invite code section */
+    .invite-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .invite-form input {
+      flex: 1;
+      background: #0a0a0a;
+      border: 1px solid #1a1a1a;
+      border-radius: 4px;
+      padding: 10px 14px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 12px;
+      outline: none;
+    }
+    .invite-form input:focus { border-color: #333; }
+    .invite-form input::placeholder { color: #222; }
+    .invite-form button {
+      background: #9146ff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 20px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .invite-form button:hover { background: #7c3aed; }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th {
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #444;
+      padding: 8px 12px;
+      border-bottom: 1px solid #1a1a1a;
+      position: sticky;
+      top: 0;
+      background: #111;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #111;
+      color: #999;
+    }
+    tr:hover td { background: #0e0e0e; }
+    .code-cell {
+      font-family: inherit;
+      letter-spacing: 1px;
+      color: #9146ff;
+      font-weight: 500;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 500;
+    }
+    .badge.admin { background: #1a0a2a; color: #9146ff; }
+    .badge.user { background: #111; color: #555; }
+    .badge.available { background: #0a1a0a; color: #22c55e; }
+    .badge.used { background: #111; color: #333; }
+
+    .copy-btn {
+      background: none; border: 1px solid #222; color: #555; font-family: inherit;
+      font-size: 10px; padding: 2px 8px; border-radius: 3px; cursor: pointer;
+    }
+    .copy-btn:hover { border-color: #444; color: #999; }
+    .copy-btn.copied { border-color: #22c55e; color: #22c55e; }
+
+    .empty-row td { color: #222; text-align: center; padding: 24px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo">clippy</div>
+      <nav>
+        <a href="/">dashboard</a>
+        <a href="/admin.html" class="active">admin</a>
+        <a href="/docs.html">docs</a>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <img class="avatar" id="userAvatar" src="" alt="" style="display:none">
+      <span class="user" id="userName"></span>
+      <button onclick="logout()">logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="page-title">admin panel</div>
+
+    <!-- Stats overview -->
+    <div class="stat-grid" id="statGrid">
+      <div class="stat-card"><div class="stat-value" id="statUsers">-</div><div class="stat-label">users</div></div>
+      <div class="stat-card"><div class="stat-value" id="statInvites">-</div><div class="stat-label">invites available</div></div>
+      <div class="stat-card"><div class="stat-value" id="statChannels">-</div><div class="stat-label">channels</div></div>
+      <div class="stat-card"><div class="stat-value" id="statMsgRate">-</div><div class="stat-label">msg/s</div></div>
+      <div class="stat-card">
+        <div class="stat-value" id="statBudgetSpent">-</div>
+        <div class="stat-label">LLM spent</div>
+        <div class="stat-sub" id="statBudgetRemaining"></div>
+        <div class="budget-bar"><div class="budget-fill" id="budgetFill" style="width:0%"></div></div>
+      </div>
+      <div class="stat-card"><div class="stat-value" id="statLLMCalls">-</div><div class="stat-label">LLM calls</div></div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Invite Codes -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">invite codes</div>
+        </div>
+        <div class="invite-form">
+          <input type="text" id="inviteLabel" placeholder="label (optional)">
+          <button onclick="createInvite()">generate</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>code</th><th>label</th><th>status</th><th>used by</th><th></th></tr></thead>
+            <tbody id="inviteTable"><tr class="empty-row"><td colspan="5">loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Users -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">users</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>user</th><th>role</th><th>last seen</th><th>joined</th></tr></thead>
+            <tbody id="userTable"><tr class="empty-row"><td colspan="4">loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null
+
+    // Auth check
+    fetch('/auth/me').then(r => r.json()).then(d => {
+      if (!d.authenticated) return window.location.href = '/login.html'
+      if (d.user.role !== 'admin') return window.location.href = '/'
+      currentUser = d.user
+      document.getElementById('userName').textContent = d.user.username
+      if (d.user.profileImage) {
+        const av = document.getElementById('userAvatar')
+        av.src = d.user.profileImage
+        av.style.display = 'block'
+      }
+      loadAll()
+    }).catch(() => window.location.href = '/login.html')
+
+    async function loadAll() {
+      await Promise.all([loadStats(), loadInvites(), loadUsers()])
+    }
+
+    async function loadStats() {
+      try {
+        const s = await fetch('/admin/stats').then(r => r.json())
+        document.getElementById('statUsers').textContent = s.auth.totalUsers
+        document.getElementById('statInvites').textContent = s.auth.availableInvites
+        document.getElementById('statChannels').textContent = s.system.totalChannels?.toLocaleString() || '-'
+        document.getElementById('statMsgRate').textContent = s.system.totalMsgsPerSec?.toFixed(0) || '-'
+        document.getElementById('statBudgetSpent').textContent = '$' + s.llm.spent.toFixed(4)
+        document.getElementById('statBudgetRemaining').textContent = `$${s.llm.remaining.toFixed(2)} / $${s.llm.limit} remaining`
+        document.getElementById('statLLMCalls').textContent = s.llm.totalCalls
+
+        const pct = Math.min(100, (s.llm.spent / s.llm.limit) * 100)
+        const fill = document.getElementById('budgetFill')
+        fill.style.width = pct + '%'
+        fill.className = 'budget-fill' + (pct > 80 ? ' danger' : pct > 50 ? ' warn' : '')
+      } catch {}
+    }
+
+    async function loadInvites() {
+      try {
+        const d = await fetch('/admin/invites').then(r => r.json())
+        const tbody = document.getElementById('inviteTable')
+        if (!d.invites.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="5">no invite codes yet</td></tr>'
+          return
+        }
+        tbody.innerHTML = d.invites.map(i => `
+          <tr>
+            <td class="code-cell">${i.code}</td>
+            <td>${i.label || '-'}</td>
+            <td><span class="badge ${i.usedBy ? 'used' : 'available'}">${i.usedBy ? 'used' : 'available'}</span></td>
+            <td>${i.usedBy || '-'}</td>
+            <td>${!i.usedBy ? `<button class="copy-btn" onclick="copyCode(this, '${i.code}')">copy</button>` : ''}</td>
+          </tr>
+        `).join('')
+      } catch {}
+    }
+
+    async function loadUsers() {
+      try {
+        const d = await fetch('/admin/users').then(r => r.json())
+        const tbody = document.getElementById('userTable')
+        if (!d.users.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="4">no users yet</td></tr>'
+          return
+        }
+        tbody.innerHTML = d.users.map(u => `
+          <tr>
+            <td style="color:#fff">${u.username}</td>
+            <td><span class="badge ${u.role}">${u.role}</span></td>
+            <td>${timeAgo(u.lastSeen)}</td>
+            <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+          </tr>
+        `).join('')
+      } catch {}
+    }
+
+    async function createInvite() {
+      const label = document.getElementById('inviteLabel').value.trim()
+      try {
+        const res = await fetch('/admin/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label }),
+        })
+        if (res.ok) {
+          document.getElementById('inviteLabel').value = ''
+          await Promise.all([loadInvites(), loadStats()])
+        }
+      } catch {}
+    }
+
+    function copyCode(btn, code) {
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'copied'
+        btn.classList.add('copied')
+        setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied') }, 2000)
+      })
+    }
+
+    function timeAgo(ts) {
+      const s = Math.floor((Date.now() - ts) / 1000)
+      if (s < 60) return 'just now'
+      if (s < 3600) return Math.floor(s / 60) + 'm ago'
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago'
+      return Math.floor(s / 86400) + 'd ago'
+    }
+
+    async function logout() {
+      await fetch('/auth/logout', { method: 'POST' })
+      window.location.href = '/login.html'
+    }
+
+    // Auto-refresh stats
+    setInterval(loadStats, 10000)
+  </script>
+</body>
+</html>

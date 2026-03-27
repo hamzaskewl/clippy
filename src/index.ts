@@ -8,16 +8,16 @@ import { Mppx, tempo } from 'mppx/express'
 import { createClient, http } from 'viem'
 import { tempo as tempoChain } from 'viem/chains'
 import { connectFirehose, getTrending, getChannel, getSpikes, getStats, isConnected, getVodTimestamp, getVodUrl, isStreamLive, onSpike, getViewerCount, setActiveChannel, removeActiveChannel } from './firehose.js'
-import { summarizeChannel, classifySpike } from './summarize.js'
+import { summarizeChannel, classifySpike, classifySpikeDirect, summarizeChannelDirect, getLLMBudget, hasDirectAPI } from './summarize.js'
 import { startMomentCapture, getMoments, getMomentById, watchChannel, unwatchChannel, getWatchedChannels } from './moments.js'
 import { setTwitchAuth, getTwitchAuth, createClip } from './clip.js'
+import { createUser, getUser, createSession, validateSession, destroySession, generateInviteCode, validateInviteCode, redeemInviteCode, getInviteCodes, getAllUsers, isAdmin, checkRateLimit, getSessionCookie, clearSessionCookie, parseSessionToken, getAuthStats } from './auth.js'
 import crypto from 'crypto'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 app.use(express.json())
-app.use(express.static(path.join(__dirname, '..', 'public')))
 
 const PORT = process.env.PORT || 3000
 const WALLET = process.env.WALLET_ADDRESS || '0xfaad4f22fc6259646c8925203a04020e5458da6d'
@@ -48,13 +48,195 @@ const mppx = Mppx.create({
   realm: 'clippy.live',
 })
 
-// --- Health / Status (free) ---
+// --- Twitch OAuth config ---
+const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || ''
+const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || ''
+let twitchUserToken: string | null = null
+let twitchUserId: string | null = null
+
+// --- Auth middleware ---
+function requireAuth(req: any, res: any, next: any) {
+  const token = parseSessionToken(req.headers.cookie)
+  if (!token) return res.status(401).json({ error: 'Not authenticated' })
+  const user = validateSession(token)
+  if (!user) return res.status(401).json({ error: 'Session expired' })
+  req.user = user
+  next()
+}
+
+function requireAdmin(req: any, res: any, next: any) {
+  const token = parseSessionToken(req.headers.cookie)
+  if (!token) return res.status(401).json({ error: 'Not authenticated' })
+  const user = validateSession(token)
+  if (!user) return res.status(401).json({ error: 'Session expired' })
+  if (user.role !== 'admin') return res.status(403).json({ error: 'Admin access required' })
+  req.user = user
+  next()
+}
+
+function rateLimit(req: any, res: any, next: any) {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown'
+  if (!checkRateLimit(ip)) {
+    return res.status(429).json({ error: 'Too many requests. Try again in a minute.' })
+  }
+  next()
+}
+
+// --- Serve static files (but NOT demo.html) ---
+app.use((req, res, next) => {
+  if (req.path === '/demo.html') return res.status(404).send('Not found')
+  next()
+})
+app.use(express.static(path.join(__dirname, '..', 'public')))
+
+// --- Auth check endpoint ---
+app.get('/auth/me', (req, res) => {
+  const token = parseSessionToken(req.headers.cookie)
+  if (!token) return res.json({ authenticated: false })
+  const user = validateSession(token)
+  if (!user) return res.json({ authenticated: false })
+  res.json({
+    authenticated: true,
+    user: { id: user.id, username: user.username, profileImage: user.profileImage, role: user.role },
+  })
+})
+
+// --- Twitch OAuth for user login (with invite code) ---
+app.get('/auth/twitch', rateLimit, (req, res) => {
+  const invite = req.query.invite as string
+  const proto = req.get('x-forwarded-proto') || req.protocol
+  const redirect = `${proto}://${req.get('host')}/auth/twitch/callback`
+
+  // Store invite code in OAuth state parameter
+  const state = invite ? Buffer.from(JSON.stringify({ invite })).toString('base64url') : ''
+
+  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&scope=clips:edit+editor:manage:clips&state=${state}`
+  res.redirect(url)
+})
+
+app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
+  const code = req.query.code as string
+  const stateParam = req.query.state as string
+  if (!code) return res.status(400).send('Missing code')
+
+  // Parse invite code from state
+  let inviteCode = ''
+  if (stateParam) {
+    try {
+      const state = JSON.parse(Buffer.from(stateParam, 'base64url').toString())
+      inviteCode = state.invite || ''
+    } catch {}
+  }
+
+  const proto = req.get('x-forwarded-proto') || req.protocol
+  const redirect = `${proto}://${req.get('host')}/auth/twitch/callback`
+
+  try {
+    // Exchange code for token
+    const tokenRes = await fetch('https://id.twitch.tv/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: TWITCH_CLIENT_ID,
+        client_secret: TWITCH_CLIENT_SECRET,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: redirect,
+      }),
+    })
+    const data = await tokenRes.json() as any
+    if (!data.access_token) {
+      console.error('[auth] Twitch OAuth failed:', data)
+      return res.redirect('/login.html?error=oauth_failed')
+    }
+
+    // Get Twitch user info
+    const meRes = await fetch('https://api.twitch.tv/helix/users', {
+      headers: { 'Client-ID': TWITCH_CLIENT_ID, 'Authorization': `Bearer ${data.access_token}` },
+    })
+    const meData = await meRes.json() as any
+    const twitchUser = meData.data?.[0]
+    if (!twitchUser) return res.redirect('/login.html?error=user_fetch_failed')
+
+    const twitchId = twitchUser.id
+    const username = twitchUser.display_name || twitchUser.login
+    const profileImage = twitchUser.profile_image_url || ''
+
+    // Store token for clip creation (server-level, shared)
+    twitchUserToken = data.access_token
+    twitchUserId = twitchId
+    setTwitchAuth(data.access_token, twitchId)
+
+    // Check if user already exists
+    let user = getUser(twitchId)
+
+    if (!user) {
+      // New user — need valid invite code (unless first user)
+      const isFirst = getAllUsers().length === 0
+      if (!isFirst) {
+        if (!inviteCode || !validateInviteCode(inviteCode)) {
+          return res.redirect('/login.html?error=invalid_invite')
+        }
+        redeemInviteCode(inviteCode, twitchId)
+      }
+      user = createUser(twitchId, username, profileImage, inviteCode || 'first_user')
+    }
+
+    // Create session
+    const isSecure = proto === 'https'
+    const session = createSession(user.id)
+    res.setHeader('Set-Cookie', getSessionCookie(session.token, isSecure))
+
+    console.log(`[auth] Login: ${username} (${twitchId}) role=${user.role}`)
+    res.redirect('/')
+  } catch (err: any) {
+    console.error('[auth] OAuth error:', err.message)
+    res.redirect('/login.html?error=server_error')
+  }
+})
+
+app.post('/auth/logout', (req, res) => {
+  const token = parseSessionToken(req.headers.cookie)
+  if (token) destroySession(token)
+  const proto = req.get('x-forwarded-proto') || req.protocol
+  const isSecure = proto === 'https'
+  res.setHeader('Set-Cookie', clearSessionCookie(isSecure))
+  res.json({ ok: true })
+})
+
+// --- Admin API ---
+app.post('/admin/invite', requireAdmin, (req, res) => {
+  const { label } = req.body || {}
+  const invite = generateInviteCode((req as any).user.id, label || '')
+  res.json({ code: invite.code, label: invite.label })
+})
+
+app.get('/admin/invites', requireAdmin, (_req, res) => {
+  res.json({ invites: getInviteCodes() })
+})
+
+app.get('/admin/users', requireAdmin, (_req, res) => {
+  res.json({ users: getAllUsers() })
+})
+
+app.get('/admin/budget', requireAdmin, (_req, res) => {
+  res.json(getLLMBudget())
+})
+
+app.get('/admin/stats', requireAdmin, (_req, res) => {
+  const auth = getAuthStats()
+  const llm = getLLMBudget()
+  const system = getStats()
+  res.json({ auth, llm, system })
+})
+
+// --- Health / Status (free, public) ---
 app.get('/api', (_req, res) => {
   const stats = getStats()
   res.json({
     service: 'Clippy',
-    description: 'Real-time Twitch stream intelligence. Detects chat spikes, classifies moments with AI, auto-clips highlights. Pay-per-use via MPP.',
-    version: '2.0.0',
+    description: 'Real-time Twitch stream intelligence. Detects chat spikes, classifies moments with AI, auto-clips highlights.',
+    version: '3.0.0',
     status: stats.connected ? 'live' : 'connecting',
     ...stats,
     llms_txt: '/llms.txt',
@@ -66,100 +248,49 @@ app.get('/api', (_req, res) => {
         'GET /alerts': 'SSE spike feed. ?channel=name to filter',
         'GET /moments/:id': 'Get a moment by ID',
         'GET /moments/latest/:channel': 'Latest moment for a channel',
-        'GET /moments/:id/classify': 'Trigger AI classification on a moment',
       },
-      charge: {
+      authenticated: {
+        'GET /channel-stats/:name': 'Live channel rates + vibes',
+        'POST /track/:channel': 'Add channel to tracking',
+        'DELETE /track/:channel': 'Remove from tracking',
+        'POST /watch-clip/:channel': 'Add channel to auto-clip watchlist',
+        'DELETE /watch-clip/:channel': 'Remove from watchlist',
+      },
+      paid_mpp: {
         'POST /trending': { price: '$0.001', description: 'Full trending list' },
         'POST /channel': { price: '$0.001', description: 'Channel stats + recent messages' },
         'POST /spikes': { price: '$0.002', description: 'All active spikes with VOD links' },
         'POST /summarize': { price: '$0.01', description: 'LLM summary of channel chat' },
         'POST /moments': { price: '$0.001', description: 'List captured moments' },
-      },
-      session: {
         'POST /watch/:channel': { price: '$0.03/spike', description: 'SSE stream with AI-classified spikes + auto-clipping' },
-      },
-      watchlist: {
-        'POST /watch-clip/:channel': 'Add channel to auto-clip watchlist',
-        'DELETE /watch-clip/:channel': 'Remove from watchlist',
-        'GET /watch-clip': 'List watched channels',
       },
     },
   })
 })
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, connected: isConnected(), ...getStats() })
+  const stats = getStats()
+  res.json({ ok: true, ...stats, connected: isConnected() })
 })
 
-// --- Twitch OAuth for clip creation ---
-const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || ''
-const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || ''
-let twitchUserToken: string | null = null
-let twitchUserId: string | null = null
-
-app.get('/auth/twitch', (req, res) => {
-  const proto = req.get('x-forwarded-proto') || req.protocol
-  const redirect = `${proto}://${req.get('host')}/auth/twitch/callback`
-  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&scope=clips:edit+editor:manage:clips`
-  res.redirect(url)
-})
-
-app.get('/auth/twitch/callback', async (req, res) => {
-  const code = req.query.code as string
-  if (!code) return res.status(400).send('Missing code')
-
-  const proto = req.get('x-forwarded-proto') || req.protocol
-  const redirect = `${proto}://${req.get('host')}/auth/twitch/callback`
-  const tokenRes = await fetch('https://id.twitch.tv/oauth2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: TWITCH_CLIENT_ID,
-      client_secret: TWITCH_CLIENT_SECRET,
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: redirect,
-    }),
-  })
-  const data = await tokenRes.json() as any
-  if (data.access_token) {
-    twitchUserToken = data.access_token
-    // Get user ID
-    const meRes = await fetch('https://api.twitch.tv/helix/users', {
-      headers: { 'Client-ID': TWITCH_CLIENT_ID, 'Authorization': `Bearer ${twitchUserToken}` },
-    })
-    const meData = await meRes.json() as any
-    twitchUserId = meData.data?.[0]?.id || null
-    setTwitchAuth(twitchUserToken, twitchUserId || '')
-    console.log(`[twitch] OAuth token acquired (user: ${twitchUserId}) — auto-clipping enabled`)
-    res.send('<h3>Twitch connected!</h3><p>You can close this tab. Clips are now enabled.</p><script>setTimeout(()=>window.close(),2000)</script>')
-  } else {
-    console.error('[twitch] OAuth failed:', data)
-    res.status(500).send('OAuth failed: ' + JSON.stringify(data))
-  }
-})
-
-// Create a clip for a moment
-app.post('/clip/:id', async (req, res) => {
+// --- Create a clip for a moment ---
+app.post('/clip/:id', requireAuth, async (req, res) => {
   const moment = getMomentById(parseInt(req.params.id))
   if (!moment) return res.status(404).json({ error: 'Moment not found' })
   if (!twitchUserToken) return res.status(401).json({ error: 'Twitch not connected. Visit /auth/twitch first.' })
 
   try {
-    // Get broadcaster ID
-    const userRes = await fetch(`https://api.twitch.tv/helix/users?login=${moment.channel}`, {
+    const userRes = await fetch(`https://api.twitch.tv/helix/users?login=${encodeURIComponent(moment.channel)}`, {
       headers: { 'Client-ID': TWITCH_CLIENT_ID, 'Authorization': `Bearer ${twitchUserToken}` },
     })
     const userData = await userRes.json() as any
     const broadcasterId = userData.data?.[0]?.id
     if (!broadcasterId) return res.status(404).json({ error: `Broadcaster "${moment.channel}" not found` })
 
-    // Build title from mood/description
     const title = moment.description
       ? `${moment.channel}: ${moment.description}`.slice(0, 280)
       : `${moment.channel} +${moment.jumpPercent}% ${moment.mood || moment.vibe} moment`
 
-    // Get current VOD for the stream
     const videoRes = await fetch(`https://api.twitch.tv/helix/videos?user_id=${broadcasterId}&type=archive&first=1`, {
       headers: { 'Client-ID': TWITCH_CLIENT_ID, 'Authorization': `Bearer ${twitchUserToken}` },
     })
@@ -169,11 +300,9 @@ app.post('/clip/:id', async (req, res) => {
     let clipData: any
 
     if (vodId && moment.vodTimestamp) {
-      // Parse vodTimestamp to seconds for vod_offset (clip ends here)
       const ts = moment.vodTimestamp
       const m = ts.match(/(\d+)h(\d+)m(\d+)s/)
       const offsetSeconds = m ? parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]) : 0
-      // Clip ends 15s after spike, starts 15s before (30s default duration)
       const vodOffset = offsetSeconds + 15
 
       const params = new URLSearchParams({
@@ -215,26 +344,30 @@ app.post('/clip/:id', async (req, res) => {
   }
 })
 
-// --- Watchlist (controls which channels get auto-clipped) ---
-app.post('/watch-clip/:channel', (req, res) => {
-  watchChannel(req.params.channel)
+// --- Watchlist (requires auth) ---
+app.post('/watch-clip/:channel', requireAuth, (req, res) => {
+  const channel = req.params.channel.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+  if (!channel) return res.status(400).json({ error: 'Invalid channel name' })
+  watchChannel(channel)
   res.json({ watching: getWatchedChannels() })
 })
 
-app.delete('/watch-clip/:channel', (req, res) => {
-  unwatchChannel(req.params.channel)
+app.delete('/watch-clip/:channel', requireAuth, (req, res) => {
+  const channel = req.params.channel.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+  unwatchChannel(channel)
   res.json({ watching: getWatchedChannels() })
 })
 
-app.get('/watch-clip', (_req, res) => {
+app.get('/watch-clip', requireAuth, (_req, res) => {
   res.json({ watching: getWatchedChannels() })
 })
 
-// --- Channel stats (free, for dashboard live display) ---
-app.get('/channel-stats/:name', async (req, res) => {
-  const data = getChannel(req.params.name)
+// --- Channel stats (requires auth for dashboard) ---
+app.get('/channel-stats/:name', requireAuth, async (req, res) => {
+  const name = req.params.name.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+  const data = getChannel(name)
   if (!data) return res.status(404).json({ error: 'Not found' })
-  const viewers = await getViewerCount(req.params.name).catch(() => null)
+  const viewers = await getViewerCount(name).catch(() => null)
   res.json({
     channel: data.channel,
     rate: data.sustained,
@@ -247,15 +380,18 @@ app.get('/channel-stats/:name', async (req, res) => {
   })
 })
 
-// --- Track channels (lightweight, just rate tracking for dashboard) ---
-app.post('/track/:channel', (req, res) => {
-  setActiveChannel(req.params.channel)
-  res.json({ tracking: req.params.channel })
+// --- Track channels (requires auth) ---
+app.post('/track/:channel', requireAuth, (req, res) => {
+  const channel = req.params.channel.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+  if (!channel) return res.status(400).json({ error: 'Invalid channel name' })
+  setActiveChannel(channel)
+  res.json({ tracking: channel })
 })
 
-app.delete('/track/:channel', (req, res) => {
-  removeActiveChannel(req.params.channel)
-  res.json({ removed: req.params.channel })
+app.delete('/track/:channel', requireAuth, (req, res) => {
+  const channel = req.params.channel.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+  removeActiveChannel(channel)
+  res.json({ removed: channel })
 })
 
 // --- Trending (free for dashboard, top 10 only) ---
@@ -263,7 +399,7 @@ app.get('/trending', (_req, res) => {
   res.json(getTrending(10))
 })
 
-// --- Trending (paid, full) ---
+// --- Trending (paid via MPP, full) ---
 app.post('/trending',
   mppx.charge({ amount: '0.001', description: 'Trending channels query' }),
   (req, res) => {
@@ -273,30 +409,24 @@ app.post('/trending',
   }
 )
 
-// --- Channel (paid) ---
+// --- Channel (paid via MPP) ---
 app.post('/channel',
   mppx.charge({ amount: '0.001', description: 'Channel stats query' }),
   (req, res) => {
     const { channel } = req.body || {}
-    if (!channel) {
-      return res.status(400).json({ error: 'Missing "channel" in request body' })
-    }
+    if (!channel) return res.status(400).json({ error: 'Missing "channel" in request body' })
     const result = getChannel(channel)
-    if (!result) {
-      return res.status(404).json({ error: `Channel "${channel}" not found or no recent activity` })
-    }
+    if (!result) return res.status(404).json({ error: `Channel "${channel}" not found or no recent activity` })
     res.json(result)
   }
 )
 
-// --- Spikes (paid, with VOD timestamps) ---
+// --- Spikes (paid via MPP) ---
 app.post('/spikes',
   mppx.charge({ amount: '0.002', description: 'Spike detection query' }),
   async (req, res) => {
     const withinMinutes = req.body?.withinMinutes || 5
     const spikes = getSpikes(withinMinutes)
-
-    // Enrich with VOD timestamps
     const enriched = await Promise.all(
       spikes.map(async (spike) => {
         const vodTimestamp = spike.spikeAt ? await getVodTimestamp(spike.channel, spike.spikeAt) : null
@@ -307,12 +437,11 @@ app.post('/spikes',
         }
       })
     )
-
     res.json({ spikes: enriched, count: enriched.length })
   }
 )
 
-// --- Alerts SSE (free to connect, spike events push in real-time) ---
+// --- Alerts SSE (free, public — spike events push in real-time) ---
 app.get('/alerts', (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -320,15 +449,12 @@ app.get('/alerts', (req, res) => {
     'Connection': 'keep-alive',
   })
 
-  // Send initial heartbeat
   res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Listening for spikes...' })}\n\n`)
 
-  // Optional channel filter
   const filterChannel = (req.query.channel as string)?.toLowerCase()
   const unsubscribe = onSpike(async (spike) => {
     if (filterChannel && spike.channel.toLowerCase() !== filterChannel) return
 
-    // Add VOD timestamp
     const vodTimestamp = await getVodTimestamp(spike.channel, spike.spikeAt)
     const enrichedSpike = {
       type: 'spike',
@@ -341,7 +467,6 @@ app.get('/alerts', (req, res) => {
     res.write(`data: ${JSON.stringify(enrichedSpike)}\n\n`)
   })
 
-  // Heartbeat every 30s + stream-offline check when filtering a single channel
   let offlineStreak = 0
   const heartbeat = setInterval(async () => {
     res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`)
@@ -361,7 +486,6 @@ app.get('/alerts', (req, res) => {
     }
   }, 60_000)
 
-  // Cleanup on disconnect
   req.on('close', () => {
     unsubscribe()
     clearInterval(heartbeat)
@@ -371,11 +495,11 @@ app.get('/alerts', (req, res) => {
   console.log(`[alerts] Client connected${filterChannel ? ` (filter: ${filterChannel})` : ''}`)
 })
 
-// --- Watch (session-based, pay per spike with LLM classification) ---
+// --- Watch (session-based MPP, pay per spike with LLM classification) ---
 app.post('/watch/:channel',
   mppx.session({ amount: '0.03', unitType: 'spike', description: 'Watch channel for AI-classified spikes + auto-clipping' }),
   async (req, res) => {
-    const channel = req.params.channel.toLowerCase()
+    const channel = (Array.isArray(req.params.channel) ? req.params.channel[0] : req.params.channel).toLowerCase()
     const viewers = await getViewerCount(channel)
 
     res.writeHead(200, {
@@ -389,7 +513,6 @@ app.post('/watch/:channel',
     const unsubscribe = onSpike(async (spike) => {
       if (spike.channel.toLowerCase() !== channel) return
 
-      // Classify with LLM
       const chatSnapshot = spike.chatSnapshot || []
       const classification = await classifySpike(chatSnapshot).catch(() => null)
 
@@ -413,16 +536,13 @@ app.post('/watch/:channel',
       res.write(`data: ${JSON.stringify(event)}\n\n`)
     })
 
-    // Heartbeat + stream-offline check every 60s
     let offlineStreak = 0
     const heartbeat = setInterval(async () => {
       res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`)
 
-      // Check if stream is still live
       const live = await isStreamLive(channel)
       if (!live) {
         offlineStreak++
-        // 2 consecutive offline checks (2 min) = stream ended
         if (offlineStreak >= 2) {
           res.write(`data: ${JSON.stringify({ type: 'stream_ended', channel, message: 'Stream went offline. Session closed, unused deposit refunded.' })}\n\n`)
           res.end()
@@ -443,15 +563,12 @@ app.post('/watch/:channel',
   }
 )
 
-// --- Summarize (paid, calls LLM via MPP) ---
+// --- Summarize (paid via MPP) ---
 app.post('/summarize',
   mppx.charge({ amount: '0.01', description: 'LLM chat summarization' }),
   async (req, res) => {
     const { channel } = req.body || {}
-    if (!channel) {
-      return res.status(400).json({ error: 'Missing "channel" in request body' })
-    }
-
+    if (!channel) return res.status(400).json({ error: 'Missing "channel" in request body' })
     try {
       const result = await summarizeChannel(channel)
       res.json({ channel, ...result })
@@ -462,12 +579,14 @@ app.post('/summarize',
   }
 )
 
-// --- Classify a moment (debug, uses LLM) ---
-app.get('/moments/:id/classify', async (req, res) => {
+// --- Classify a moment (auth required, uses direct API) ---
+app.get('/moments/:id/classify', requireAuth, async (req, res) => {
   const moment = getMomentById(parseInt(req.params.id))
   if (!moment) return res.status(404).json({ error: 'Moment not found' })
 
-  const result = await classifySpike(moment.chatSnapshot)
+  // Use direct API if available, fallback to MPP
+  const classify = hasDirectAPI() ? classifySpikeDirect : classifySpike
+  const result = await classify(moment.chatSnapshot)
   if (result) {
     moment.mood = result.mood
     moment.description = result.description
@@ -475,7 +594,7 @@ app.get('/moments/:id/classify', async (req, res) => {
   res.json({ channel: moment.channel, jumpPercent: moment.jumpPercent, vibe: moment.vibe, mood: result?.mood, description: result?.description, chatSnapshot: moment.chatSnapshot.slice(0, 10) })
 })
 
-// --- Moments (auto-captured spike moments) ---
+// --- Moments (paid via MPP for agents) ---
 app.post('/moments',
   mppx.charge({ amount: '0.001', description: 'Captured moments query' }),
   (req, res) => {
@@ -497,7 +616,6 @@ app.get('/clip/:id', (req, res) => {
   if (!moment) return res.status(404).send('Moment not found')
 
   const t = moment.clipStart || moment.vodTimestamp || '0h0m0s'
-  // Parse VOD timestamp to seconds for embed
   const match = t.match(/(\d+)h(\d+)m(\d+)s/)
   const seconds = match ? parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseInt(match[3]) : 0
 
@@ -539,7 +657,7 @@ app.get('/clip/:id', (req, res) => {
   </div>
   ${moment.description ? `<div class="desc">${moment.description}</div>` : ''}
   <div class="embed">
-    <iframe src="https://player.twitch.tv/?channel=${moment.channel}&parent=${req.hostname}&time=${t}&autoplay=true&muted=false" allowfullscreen></iframe>
+    <iframe src="https://player.twitch.tv/?channel=${encodeURIComponent(moment.channel)}&parent=${req.hostname}&time=${t}&autoplay=true&muted=false" allowfullscreen></iframe>
   </div>
   <div class="chat">
     ${moment.chatSnapshot.map(m => {
@@ -553,9 +671,7 @@ app.get('/clip/:id', (req, res) => {
 app.get('/moments/:id', (req, res) => {
   const id = parseInt(req.params.id)
   const moment = getMomentById(id)
-  if (!moment) {
-    return res.status(404).json({ error: `Moment #${id} not found` })
-  }
+  if (!moment) return res.status(404).json({ error: `Moment #${id} not found` })
   res.json(moment)
 })
 
@@ -563,6 +679,8 @@ app.get('/moments/:id', (req, res) => {
 app.listen(PORT, () => {
   console.log(`[server] Clippy API running on http://localhost:${PORT}`)
   console.log(`[server] MPP payments enabled — recipient: ${WALLET}`)
+  console.log(`[server] Direct Anthropic API: ${hasDirectAPI() ? 'enabled' : 'disabled (set ANTHROPIC_API_KEY)'}`)
+  console.log(`[server] LLM budget: $${getLLMBudget().limit}`)
   console.log(`[server] Connecting to Twitch firehose...`)
   connectFirehose()
   startMomentCapture()
