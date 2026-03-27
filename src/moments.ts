@@ -52,16 +52,11 @@ const MAX_USER_CHANNELS = 3
 
 export async function initWatchedChannels() {
   if (db) {
-    const rows = await db.select().from(watchedTable)
-    for (const r of rows) {
-      watchedChannelsSet.add(r.channel)
-      setActiveChannel(r.channel)
-    }
-    if (rows.length > 0) {
-      console.log(`[moments] Restored ${rows.length} watched channels from DB`)
-    }
+    // Clear stale global watched_channels — user_channels is the source of truth now
+    await db.delete(watchedTable)
+    console.log(`[moments] Cleared stale watched_channels table`)
 
-    // Load user channels and activate them
+    // Load user channels — only confirmed ones get activated
     const ucRows = await db.select().from(userChannelsTable)
     for (const r of ucRows) {
       const list = memUserChannels.get(r.userId) || []
@@ -72,14 +67,17 @@ export async function initWatchedChannels() {
       })
       memUserChannels.set(r.userId, list)
 
-      // Activate confirmed channels
       if (r.confirmed) {
         watchedChannelsSet.add(r.channel)
         setActiveChannel(r.channel)
       }
     }
+    const confirmed = ucRows.filter(r => r.confirmed)
+    if (confirmed.length > 0) {
+      console.log(`[moments] Activated ${confirmed.length} confirmed user channels: ${confirmed.map(r => r.channel).join(', ')}`)
+    }
     if (ucRows.length > 0) {
-      console.log(`[moments] Restored ${ucRows.length} user channel slots from DB`)
+      console.log(`[moments] Loaded ${ucRows.length} user channel slots from DB`)
     }
   }
 }
