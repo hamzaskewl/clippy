@@ -40,7 +40,7 @@ Every second, per channel:
 Spike fires when:
   burst > baseline × adaptive_threshold   (1.5x to 2.5x depending on channel size)
   burst > 1 msg/s                         (absolute minimum)
-  viewers ≥ 500                           (skip dead streams)
+  viewers ≥ 500
   30s debounce                            (no spam)
 ```
 
