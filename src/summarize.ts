@@ -3,13 +3,16 @@ import { Mppx, tempo } from 'mppx/client'
 import { createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { tempo as tempoChain } from 'viem/chains'
+import { db } from './db/index.js'
+import { llmUsage } from './db/schema.js'
+import { eq } from 'drizzle-orm'
 
 // --- Direct Anthropic API (for dashboard users, free tier) ---
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || ''
 const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514'
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 
-// Budget tracking
+// Budget tracking (restored from DB on startup)
 let totalInputTokens = 0
 let totalOutputTokens = 0
 let totalCalls = 0
@@ -34,6 +37,43 @@ export function getLLMBudget() {
 
 function isBudgetExhausted(): boolean {
   return estimateCostUSD() >= BUDGET_LIMIT_USD
+}
+
+// Restore LLM usage from DB
+export async function restoreLLMUsage() {
+  if (!db) return
+  try {
+    const rows = await db.select().from(llmUsage).where(eq(llmUsage.id, 'global'))
+    if (rows.length > 0) {
+      totalInputTokens = rows[0].totalInputTokens
+      totalOutputTokens = rows[0].totalOutputTokens
+      totalCalls = rows[0].totalCalls
+      console.log(`[llm] Restored usage: ${totalCalls} calls, $${estimateCostUSD().toFixed(4)} spent`)
+    }
+  } catch (err: any) {
+    console.error('[llm] Failed to restore usage:', err.message)
+  }
+}
+
+// Persist LLM usage to DB (called after each API call)
+async function persistLLMUsage() {
+  if (!db) return
+  try {
+    await db.insert(llmUsage).values({
+      id: 'global',
+      totalInputTokens,
+      totalOutputTokens,
+      totalCalls,
+    }).onConflictDoUpdate({
+      target: llmUsage.id,
+      set: {
+        totalInputTokens,
+        totalOutputTokens,
+        totalCalls,
+        updatedAt: new Date(),
+      },
+    })
+  } catch {}
 }
 
 // Direct Anthropic fetch with retry
@@ -66,6 +106,7 @@ async function anthropicFetch(body: object): Promise<any> {
       totalInputTokens += result.usage.input_tokens || 0
       totalOutputTokens += result.usage.output_tokens || 0
       totalCalls++
+      persistLLMUsage()
     }
 
     if (!res.ok) {

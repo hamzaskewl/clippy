@@ -508,8 +508,6 @@
         }
         userChannels = data.channels || []
         renderSlots()
-        // Activate clip watching
-        fetch(`/watch-clip/${ch}`, { method: 'POST' })
       } catch {
         showError('Failed to confirm channel')
       }

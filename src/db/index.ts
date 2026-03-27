@@ -96,6 +96,16 @@ export async function initDatabase() {
     `
 
     await client`
+      CREATE TABLE IF NOT EXISTS llm_usage (
+        id TEXT PRIMARY KEY DEFAULT 'global',
+        total_input_tokens BIGINT NOT NULL DEFAULT 0,
+        total_output_tokens BIGINT NOT NULL DEFAULT 0,
+        total_calls INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `
+
+    await client`
       CREATE TABLE IF NOT EXISTS twitch_tokens (
         user_id TEXT PRIMARY KEY,
         access_token TEXT NOT NULL,

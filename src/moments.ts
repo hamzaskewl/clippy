@@ -173,8 +173,13 @@ export async function removeUserChannel(userId: string, channel: string): Promis
 
   // Check if any other user still watches this channel
   const stillWatched = await isChannelWatchedByAnyone(ch)
-  if (!stillWatched && !watchedChannelsSet.has(ch)) {
+  if (!stillWatched) {
+    watchedChannelsSet.delete(ch)
     removeActiveChannel(ch)
+    // Also clean from global watched_channels table if it was added there
+    if (db) {
+      await db.delete(watchedTable).where(eq(watchedTable.channel, ch)).catch(() => {})
+    }
   }
 
   console.log(`[user-ch] ${userId} removed channel: ${ch}`)

@@ -64,6 +64,14 @@ export const watchedChannels = pgTable('watched_channels', {
   addedAt: timestamp('added_at').defaultNow().notNull(),
 })
 
+export const llmUsage = pgTable('llm_usage', {
+  id: text('id').primaryKey().default('global'),
+  totalInputTokens: bigint('total_input_tokens', { mode: 'number' }).notNull().default(0),
+  totalOutputTokens: bigint('total_output_tokens', { mode: 'number' }).notNull().default(0),
+  totalCalls: integer('total_calls').notNull().default(0),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
 export const twitchTokens = pgTable('twitch_tokens', {
   userId: text('user_id').primaryKey(),
   accessToken: text('access_token').notNull(),
