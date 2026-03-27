@@ -8,7 +8,7 @@ if (!DATABASE_URL) {
   console.warn('[db] DATABASE_URL not set — running without persistence (in-memory only)')
 }
 
-const client = DATABASE_URL ? postgres(DATABASE_URL, { max: 10 }) : null
+const client = DATABASE_URL ? postgres(DATABASE_URL, { max: 10, onnotice: () => {} }) : null
 
 export const db = client ? drizzle(client, { schema }) : null
 
