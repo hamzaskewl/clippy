@@ -602,18 +602,23 @@
     }
 
     function dedupeSpikes() {
-      // Remove dupes by channel+time proximity (within 30s)
+      // Remove dupes by dbId or channel+time proximity (within 60s)
       const seen = []
       for (let i = spikes.length - 1; i >= 0; i--) {
         const s = spikes[i]
-        const dupe = seen.find(x => x.channel === s.channel && Math.abs(x.receivedAt - s.receivedAt) < 30000)
+        const dupe = seen.find(x =>
+          (s.dbId && x.dbId && s.dbId === x.dbId) ||
+          (x.channel === s.channel && Math.abs(x.receivedAt - s.receivedAt) < 60000)
+        )
         if (dupe) {
           // Keep the one with more data
-          if ((s.mood || s.clipUrl) && !dupe.mood && !dupe.clipUrl) {
+          if ((s.mood || s.clipUrl || s.dbId) && !dupe.mood && !dupe.clipUrl && !dupe.dbId) {
             const idx = spikes.indexOf(dupe)
             if (idx > -1) spikes.splice(idx, 1)
             seen.push(s)
           } else {
+            // Merge dbId from the one being removed if the kept one lacks it
+            if (s.dbId && !dupe.dbId) dupe.dbId = s.dbId
             spikes.splice(i, 1)
           }
         } else {
@@ -694,6 +699,7 @@
         const res = await fetch(`/moments/latest/${channel}`)
         if (!res.ok) return
         const m = await res.json()
+        if (m.id) spike.dbId = m.id
         if (m.clipUrl) spike.clipUrl = m.clipUrl
         if (m.mood && m.mood !== 'error') { spike.mood = m.mood; spike.description = m.description }
         if (m.chatSnapshot && m.chatSnapshot.length > (spike.chatSnapshot?.length || 0)) spike.chatSnapshot = m.chatSnapshot
