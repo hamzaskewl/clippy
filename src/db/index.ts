@@ -137,6 +137,19 @@ export async function initDatabase() {
     try { await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS tos_accepted_at TIMESTAMP` } catch {}
     try { await client`ALTER TABLE moments ADD COLUMN IF NOT EXISTS user_id TEXT` } catch {}
 
+    // Deduplicate existing moments (keep the one with the lowest id per channel+spike_at+user_id)
+    try {
+      const deleted = await client`
+        DELETE FROM moments WHERE id NOT IN (
+          SELECT MIN(id) FROM moments GROUP BY channel, spike_at, COALESCE(user_id, '')
+        )
+      `
+      if (deleted.count > 0) console.log(`[db] Cleaned up ${deleted.count} duplicate moments`)
+    } catch {}
+
+    // Add unique index to prevent future duplicates
+    try { await client`CREATE UNIQUE INDEX IF NOT EXISTS idx_moments_unique_spike ON moments (channel, spike_at, COALESCE(user_id, ''))` } catch {}
+
     console.log('[db] Tables initialized')
   } catch (err: any) {
     console.error('[db] Init error:', err.message)

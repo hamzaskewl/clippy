@@ -245,6 +245,19 @@ async function isChannelWatchedByAnyone(channel: string): Promise<boolean> {
 
 async function saveMoment(moment: Moment): Promise<number> {
   if (db) {
+    // Check for existing moment with same channel+spikeAt+userId (prevent dupes)
+    const existing = await db.select({ id: momentsTable.id }).from(momentsTable)
+      .where(and(
+        eq(momentsTable.channel, moment.channel),
+        eq(momentsTable.spikeAt, moment.spikeAt),
+        moment.userId ? eq(momentsTable.userId, moment.userId) : sql`user_id IS NULL`
+      ))
+      .limit(1)
+    if (existing.length > 0) {
+      console.log(`[moments] Skipping duplicate: ${moment.channel} spikeAt=${moment.spikeAt} userId=${moment.userId}`)
+      return existing[0].id
+    }
+
     const rows = await db.insert(momentsTable).values({
       channel: moment.channel,
       userId: moment.userId,
