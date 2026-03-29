@@ -264,7 +264,7 @@ setInterval(() => {
         const peakSnap = state.peakRate
 
         getStreamContext(channelName).then(ctx => {
-          if (!ctx || ctx.viewers < 500) return // skip offline or small streams
+          if (!ctx) return // skip offline streams
 
           const vibes = getVibes(state)
           const chatSnapshot = state.recentMessages.slice(-50).map(m => `${m.displayName}: ${m.text}`)
