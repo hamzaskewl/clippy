@@ -426,8 +426,9 @@ export function startMomentCapture() {
 
 export async function getMomentsByUser(userId: string, limit: number = 50): Promise<Moment[]> {
   if (db) {
+    // Deduplicate by channel+spikeAt in case multiple rows exist for same spike
     const rows = await db.select().from(momentsTable)
-      .where(eq(momentsTable.userId, userId))
+      .where(sql`user_id = ${userId} AND id IN (SELECT MIN(id) FROM moments WHERE user_id = ${userId} GROUP BY channel, spike_at)`)
       .orderBy(desc(momentsTable.id))
       .limit(limit)
     return rows.map(rowToMoment)
@@ -440,19 +441,21 @@ export async function getMomentsByUser(userId: string, limit: number = 50): Prom
 
 export async function getMoments(options?: { channel?: string; clipWorthyOnly?: boolean; limit?: number; offset?: number }): Promise<Moment[]> {
   if (db) {
-    let query = db.select().from(momentsTable).orderBy(desc(momentsTable.id)).$dynamic()
+    // Deduplicate by channel+spikeAt — pick the row with the lowest id per unique spike
+    let whereClause = sql`id IN (SELECT MIN(id) FROM moments GROUP BY channel, spike_at)`
 
     if (options?.channel) {
-      query = query.where(eq(momentsTable.channel, options.channel.toLowerCase()))
+      whereClause = sql`${whereClause} AND channel = ${options.channel.toLowerCase()}`
     }
     if (options?.clipWorthyOnly) {
-      query = query.where(eq(momentsTable.clipWorthy, true))
+      whereClause = sql`${whereClause} AND clip_worthy = true`
     }
 
-    query = query.limit(options?.limit || 20)
-    if (options?.offset) query = query.offset(options.offset)
-
-    const rows = await query
+    const rows = await db.select().from(momentsTable)
+      .where(whereClause)
+      .orderBy(desc(momentsTable.id))
+      .limit(options?.limit || 20)
+      .offset(options?.offset || 0)
     return rows.map(rowToMoment)
   }
 
@@ -503,8 +506,9 @@ export async function getMomentStats(): Promise<{ total: number; clipped: number
 
 export async function getClippedMoments(limit: number = 20, offset: number = 0): Promise<Moment[]> {
   if (db) {
+    // Deduplicate by channel+spikeAt — pick the row with the lowest id per unique spike
     const rows = await db.select().from(momentsTable)
-      .where(sql`clip_url IS NOT NULL`)
+      .where(sql`clip_url IS NOT NULL AND id IN (SELECT MIN(id) FROM moments WHERE clip_url IS NOT NULL GROUP BY channel, spike_at)`)
       .orderBy(desc(momentsTable.id))
       .limit(limit)
       .offset(offset)
