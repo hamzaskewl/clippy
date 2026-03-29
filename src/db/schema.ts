@@ -80,6 +80,12 @@ export const twitchTokens = pgTable('twitch_tokens', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
+export const whitelist = pgTable('whitelist', {
+  username: text('username').primaryKey(),
+  addedBy: text('added_by').notNull(),
+  addedAt: timestamp('added_at').defaultNow().notNull(),
+})
+
 export const userChannels = pgTable('user_channels', {
   id: serial('id').primaryKey(),
   userId: text('user_id').notNull(),

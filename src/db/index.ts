@@ -125,6 +125,14 @@ export async function initDatabase() {
       )
     `
 
+    await client`
+      CREATE TABLE IF NOT EXISTS whitelist (
+        username TEXT PRIMARY KEY,
+        added_by TEXT NOT NULL,
+        added_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `
+
     // Migrations
     try { await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS tos_accepted_at TIMESTAMP` } catch {}
     try { await client`ALTER TABLE moments ADD COLUMN IF NOT EXISTS user_id TEXT` } catch {}

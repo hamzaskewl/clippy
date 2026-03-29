@@ -11,7 +11,7 @@ import { connectFirehose, getTrending, getChannel, getSpikes, getStats, isConnec
 import { summarizeChannel, classifySpike, classifySpikeDirect, summarizeChannelDirect, getLLMBudget, hasDirectAPI, restoreLLMUsage } from './summarize.js'
 import { startMomentCapture, getMoments, getMomentById, getMomentsByUser, watchChannel, unwatchChannel, getWatchedChannels, getMomentStats, getClippedMoments, initWatchedChannels, getUserChannels, addUserChannel, removeUserChannel, confirmUserChannel } from './moments.js'
 import { setTwitchAuth, getTwitchAuth, createClip, restoreTwitchAuth } from './clip.js'
-import { createUser, getUser, createSession, validateSession, destroySession, generateInviteCode, validateInviteCode, redeemInviteCode, getInviteCodes, getAllUsers, isAdmin, isDesignatedAdmin, checkRateLimit, getSessionCookie, clearSessionCookie, parseSessionToken, getAuthStats, createPendingRegistration, consumePendingRegistration } from './auth.js'
+import { createUser, getUser, createSession, validateSession, destroySession, generateInviteCode, validateInviteCode, redeemInviteCode, getInviteCodes, getAllUsers, isAdmin, isDesignatedAdmin, checkRateLimit, getSessionCookie, clearSessionCookie, parseSessionToken, getAuthStats, createPendingRegistration, consumePendingRegistration, deleteUser, deleteInviteCode, addToWhitelist, removeFromWhitelist, getWhitelist, isWhitelisted, loadWhitelist } from './auth.js'
 import { initDatabase } from './db/index.js'
 import crypto from 'crypto'
 
@@ -187,7 +187,17 @@ app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
       return res.redirect('/dashboard.html')
     }
 
-    // 3. New user — if invite code from URL, try to auto-apply
+    // 3. Whitelisted user — create + log in, no invite needed
+    if (isWhitelisted(username)) {
+      user = await createUser(twitchId, username, profileImage, 'whitelist', true)
+      const isSecure = proto === 'https'
+      const session = await createSession(user.id)
+      res.setHeader('Set-Cookie', getSessionCookie(session.token, isSecure))
+      console.log(`[auth] Whitelisted user registered: ${username} (${twitchId})`)
+      return res.redirect('/dashboard.html')
+    }
+
+    // 4. New user — if invite code from URL, try to auto-apply
     if (inviteFromUrl) {
       const valid = await validateInviteCode(inviteFromUrl)
       if (valid) {
@@ -275,6 +285,39 @@ app.get('/admin/stats', requireAdmin, async (_req, res) => {
   const llm = getLLMBudget()
   const system = getStats()
   res.json({ auth, llm, system })
+})
+
+// --- Admin: delete user ---
+app.delete('/admin/users/:id', requireAdmin, async (req, res) => {
+  const userId = req.params.id
+  if (userId === (req as any).user.id) return res.status(400).json({ error: "Can't delete yourself" })
+  await deleteUser(userId)
+  res.json({ ok: true })
+})
+
+// --- Admin: delete invite code ---
+app.delete('/admin/invites/:code', requireAdmin, async (req, res) => {
+  await deleteInviteCode(req.params.code)
+  res.json({ ok: true })
+})
+
+// --- Admin: whitelist ---
+app.get('/admin/whitelist', requireAdmin, async (_req, res) => {
+  res.json({ whitelist: await getWhitelist() })
+})
+
+app.post('/admin/whitelist', requireAdmin, async (req, res) => {
+  const { username } = req.body || {}
+  if (!username) return res.status(400).json({ error: 'Missing username' })
+  const u = username.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+  if (!u) return res.status(400).json({ error: 'Invalid username' })
+  await addToWhitelist(u, (req as any).user.id)
+  res.json({ ok: true, whitelist: await getWhitelist() })
+})
+
+app.delete('/admin/whitelist/:username', requireAdmin, async (req, res) => {
+  await removeFromWhitelist(req.params.username.toLowerCase())
+  res.json({ ok: true, whitelist: await getWhitelist() })
 })
 
 // --- Health / Status (free, public) ---
@@ -794,6 +837,7 @@ async function start() {
   await initWatchedChannels()
   await restoreTwitchAuth()
   await restoreLLMUsage()
+  await loadWhitelist()
 
   app.listen(PORT, () => {
     console.log(`[server] Clippy API running on http://localhost:${PORT}`)

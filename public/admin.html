@@ -336,11 +336,23 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>user</th><th>role</th><th>last seen</th><th>joined</th></tr></thead>
-            <tbody id="userTable"><tr class="empty-row"><td colspan="4">loading...</td></tr></tbody>
+            <thead><tr><th>user</th><th>role</th><th>last seen</th><th>joined</th><th></th></tr></thead>
+            <tbody id="userTable"><tr class="empty-row"><td colspan="5">loading...</td></tr></tbody>
           </table>
         </div>
       </div>
+    </div>
+
+    <!-- Whitelist -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <div class="card-title">whitelist</div>
+      </div>
+      <div class="invite-form">
+        <input type="text" id="whitelistInput" placeholder="twitch username" style="flex:1" onkeydown="if(event.key==='Enter')addWhitelist()">
+        <button onclick="addWhitelist()">add</button>
+      </div>
+      <div id="whitelistList" style="font-size:11px;color:#555"></div>
     </div>
   </div>
 
@@ -363,7 +375,7 @@
     }).catch(() => window.location.href = '/login.html')
 
     async function loadAll() {
-      await Promise.all([loadStats(), loadInvites(), loadUsers()])
+      await Promise.all([loadStats(), loadInvites(), loadUsers(), loadWhitelist()])
     }
 
     async function loadStats() {
@@ -410,7 +422,10 @@
                 <span class="badge ${exhausted ? 'used' : 'available'}" style="margin-top:4px">${exhausted ? 'exhausted' : 'available'}</span>
               </td>
               <td>${usedByHtml}</td>
-              <td>${!exhausted ? `<button class="copy-btn" onclick="copyCode(this, '${i.code}')">copy</button>` : ''}</td>
+              <td style="display:flex;gap:4px">
+                ${!exhausted ? `<button class="copy-btn" onclick="copyCode(this, '${i.code}')">copy</button>` : ''}
+                <button class="copy-btn" style="color:#ef4444;border-color:#ef444444" onclick="deleteInvite('${i.code}')">del</button>
+              </td>
             </tr>
           `
         }).join('')
@@ -427,10 +442,11 @@
         }
         tbody.innerHTML = d.users.map(u => `
           <tr>
-            <td style="color:#fff">${u.username}</td>
+            <td style="color:#fff">${esc(u.username)}</td>
             <td><span class="badge ${u.role}">${u.role}</span></td>
             <td>${timeAgo(u.lastSeen)}</td>
             <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+            <td>${u.role !== 'admin' ? `<button class="copy-btn" style="color:#ef4444;border-color:#ef444444" onclick="revokeUser('${u.id}','${esc(u.username)}')">revoke</button>` : ''}</td>
           </tr>
         `).join('')
       } catch {}
@@ -492,6 +508,62 @@
     async function logout() {
       await fetch('/auth/logout', { method: 'POST' })
       window.location.href = '/login.html'
+    }
+
+    async function deleteInvite(code) {
+      if (!confirm(`Delete invite code ${code}?`)) return
+      try {
+        await fetch(`/admin/invites/${code}`, { method: 'DELETE' })
+        await Promise.all([loadInvites(), loadStats()])
+      } catch {}
+    }
+
+    async function revokeUser(id, username) {
+      if (!confirm(`Revoke access for ${username}? This deletes their account and all sessions.`)) return
+      try {
+        await fetch(`/admin/users/${id}`, { method: 'DELETE' })
+        await Promise.all([loadUsers(), loadStats()])
+      } catch {}
+    }
+
+    // --- Whitelist ---
+    async function loadWhitelist() {
+      try {
+        const d = await fetch('/admin/whitelist').then(r => r.json())
+        const el = document.getElementById('whitelistList')
+        if (!d.whitelist.length) {
+          el.innerHTML = '<div style="color:#222;padding:12px 0;text-align:center">no whitelisted users</div>'
+          return
+        }
+        el.innerHTML = d.whitelist.map(w => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #1a1a1a">
+            <span style="color:#fff">${esc(w.username)}</span>
+            <button class="copy-btn" style="color:#ef4444;border-color:#ef444444" onclick="removeWhitelist('${w.username}')">remove</button>
+          </div>
+        `).join('')
+      } catch {}
+    }
+
+    async function addWhitelist() {
+      const input = document.getElementById('whitelistInput')
+      const username = input.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
+      input.value = ''
+      if (!username) return
+      try {
+        await fetch('/admin/whitelist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username }),
+        })
+        await loadWhitelist()
+      } catch {}
+    }
+
+    async function removeWhitelist(username) {
+      try {
+        await fetch(`/admin/whitelist/${username}`, { method: 'DELETE' })
+        await loadWhitelist()
+      } catch {}
     }
 
     // Auto-refresh stats

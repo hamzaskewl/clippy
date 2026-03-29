@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { db } from './db/index.js'
-import { users as usersTable, inviteCodes as inviteCodesTable, inviteCodeUses as inviteCodeUsesTable, sessions as sessionsTable } from './db/schema.js'
+import { users as usersTable, inviteCodes as inviteCodesTable, inviteCodeUses as inviteCodeUsesTable, sessions as sessionsTable, whitelist as whitelistTable } from './db/schema.js'
 import { eq, desc, sql } from 'drizzle-orm'
 
 // --- Types ---
@@ -340,6 +340,76 @@ export async function getAuthStats() {
     totalInvites: memInviteCodes.size,
     usedInvites: [...memInviteCodes.values()].filter(i => i.useCount >= i.maxUses).length,
     availableInvites: [...memInviteCodes.values()].filter(i => i.useCount < i.maxUses).length,
+  }
+}
+
+// --- Delete user (revoke access) ---
+
+export async function deleteUser(userId: string): Promise<boolean> {
+  if (db) {
+    await db.delete(sessionsTable).where(eq(sessionsTable.userId, userId))
+    await db.delete(usersTable).where(eq(usersTable.id, userId))
+  }
+  // Clean in-memory
+  memUsers.delete(userId)
+  for (const [token, session] of memSessions) {
+    if (session.userId === userId) memSessions.delete(token)
+  }
+  console.log(`[auth] User deleted: ${userId}`)
+  return true
+}
+
+// --- Delete invite code ---
+
+export async function deleteInviteCode(code: string): Promise<boolean> {
+  if (db) {
+    await db.delete(inviteCodeUsesTable).where(eq(inviteCodeUsesTable.code, code))
+    await db.delete(inviteCodesTable).where(eq(inviteCodesTable.code, code))
+  }
+  memInviteCodes.delete(code)
+  console.log(`[auth] Invite code deleted: ${code}`)
+  return true
+}
+
+// --- Whitelist ---
+
+const memWhitelist = new Set<string>()
+
+export async function addToWhitelist(username: string, addedBy: string): Promise<void> {
+  const u = username.toLowerCase()
+  memWhitelist.add(u)
+  if (db) {
+    await db.insert(whitelistTable).values({ username: u, addedBy }).onConflictDoNothing()
+  }
+  console.log(`[auth] Whitelisted: ${u} by ${addedBy}`)
+}
+
+export async function removeFromWhitelist(username: string): Promise<void> {
+  const u = username.toLowerCase()
+  memWhitelist.delete(u)
+  if (db) {
+    await db.delete(whitelistTable).where(eq(whitelistTable.username, u))
+  }
+  console.log(`[auth] Removed from whitelist: ${u}`)
+}
+
+export async function getWhitelist(): Promise<{ username: string; addedBy: string; addedAt: number }[]> {
+  if (db) {
+    const rows = await db.select().from(whitelistTable).orderBy(desc(whitelistTable.addedAt))
+    return rows.map(r => ({ username: r.username, addedBy: r.addedBy, addedAt: r.addedAt.getTime() }))
+  }
+  return [...memWhitelist].map(u => ({ username: u, addedBy: 'admin', addedAt: Date.now() }))
+}
+
+export function isWhitelisted(username: string): boolean {
+  return memWhitelist.has(username.toLowerCase())
+}
+
+export async function loadWhitelist(): Promise<void> {
+  if (db) {
+    const rows = await db.select().from(whitelistTable)
+    for (const r of rows) memWhitelist.add(r.username)
+    if (rows.length > 0) console.log(`[auth] Loaded ${rows.length} whitelisted users`)
   }
 }
 
