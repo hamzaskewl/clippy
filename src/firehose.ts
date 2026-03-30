@@ -183,14 +183,11 @@ setInterval(() => {
       }
     }
 
-    // Baseline: average of non-zero burst samples over last 2 min
-    // Zeros = dead silence, shouldn't drag baseline down
+    // Baseline: average of ALL burst samples (including zeros)
+    // This way baseline reflects real average activity and drops during quiet periods
     if (state.rateSamples.length >= 15) {
-      const active = state.rateSamples.filter(r => r > 0)
-      if (active.length >= 10) {
-        const sum = active.reduce((a, b) => a + b, 0)
-        state.baseline = sum / active.length
-      }
+      const sum = state.rateSamples.reduce((a, b) => a + b, 0)
+      state.baseline = sum / state.rateSamples.length
     }
 
     // Clean old vibes
