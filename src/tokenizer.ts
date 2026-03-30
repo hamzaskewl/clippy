@@ -153,6 +153,218 @@ const EMOJI_VIBES = new Map<string, { vibe: Vibe; weight: number }>([
   ['\u{1F622}', { vibe: 'loss', weight: 1 }],     // 😢
 ])
 
+// --- Known emote set (populated from 7TV/BTTV/FFZ APIs) ---
+// Emotes not in VIBE_MAP still get type:'emote' for emote-only detection
+const knownEmotes = new Set<string>()       // lowercase emote names (global)
+const channelEmotes = new Map<string, Set<string>>()  // per-channel emote sets
+
+// Auto-assign vibes to emotes based on name keywords
+const VIBE_KEYWORDS: { pattern: string; vibe: Vibe; weight: number }[] = [
+  // Funny
+  { pattern: 'laugh', vibe: 'funny', weight: 1 },
+  { pattern: 'lol', vibe: 'funny', weight: 1 },
+  { pattern: 'lul', vibe: 'funny', weight: 1 },
+  { pattern: 'kek', vibe: 'funny', weight: 1 },
+  { pattern: 'dead', vibe: 'funny', weight: 1 },
+  { pattern: 'clown', vibe: 'funny', weight: 1 },
+  { pattern: 'melt', vibe: 'funny', weight: 1 },
+  { pattern: 'comedy', vibe: 'funny', weight: 1 },
+  { pattern: 'bruh', vibe: 'funny', weight: 1 },
+  // Hype
+  { pattern: 'pog', vibe: 'hype', weight: 1 },
+  { pattern: 'hype', vibe: 'hype', weight: 1 },
+  { pattern: 'clap', vibe: 'hype', weight: 1 },
+  { pattern: 'dance', vibe: 'hype', weight: 1 },
+  { pattern: 'jam', vibe: 'hype', weight: 1 },
+  { pattern: 'happy', vibe: 'hype', weight: 1 },
+  { pattern: 'strong', vibe: 'hype', weight: 1 },
+  { pattern: 'chad', vibe: 'hype', weight: 1 },
+  { pattern: 'based', vibe: 'hype', weight: 1 },
+  { pattern: 'fire', vibe: 'hype', weight: 1 },
+  // Awkward
+  { pattern: 'monka', vibe: 'awkward', weight: 1 },
+  { pattern: 'scared', vibe: 'awkward', weight: 1 },
+  { pattern: 'sus', vibe: 'awkward', weight: 1 },
+  { pattern: 'weird', vibe: 'awkward', weight: 1 },
+  { pattern: 'cringe', vibe: 'awkward', weight: 1 },
+  { pattern: 'stare', vibe: 'awkward', weight: 1 },
+  { pattern: 'clueless', vibe: 'awkward', weight: 1 },
+  // Loss
+  { pattern: 'sad', vibe: 'loss', weight: 1 },
+  { pattern: 'cry', vibe: 'loss', weight: 1 },
+  { pattern: 'pain', vibe: 'loss', weight: 1 },
+  { pattern: 'copium', vibe: 'loss', weight: 1 },
+  { pattern: 'despair', vibe: 'loss', weight: 1 },
+  { pattern: 'sadge', vibe: 'loss', weight: 1 },
+  { pattern: 'rip', vibe: 'loss', weight: 1 },
+  // Win
+  { pattern: 'win', vibe: 'win', weight: 1 },
+  { pattern: 'gg', vibe: 'win', weight: 1 },
+  { pattern: 'ez', vibe: 'win', weight: 1 },
+]
+
+function autoVibeFromName(name: string): { vibe: Vibe; weight: number } | null {
+  const lower = name.toLowerCase()
+  for (const { pattern, vibe, weight } of VIBE_KEYWORDS) {
+    if (lower.includes(pattern)) return { vibe, weight }
+  }
+  return null
+}
+
+function registerEmote(name: string) {
+  const lower = name.toLowerCase()
+  knownEmotes.add(lower)
+  // If not already in VIBE_MAP, try auto-vibe from name
+  if (!VIBE_MAP.has(lower)) {
+    const autoVibe = autoVibeFromName(name)
+    if (autoVibe) {
+      VIBE_MAP.set(lower, { vibe: autoVibe.vibe, weight: autoVibe.weight, type: 'emote' })
+    }
+  }
+}
+
+function registerChannelEmote(channel: string, name: string) {
+  const ch = channel.toLowerCase()
+  if (!channelEmotes.has(ch)) channelEmotes.set(ch, new Set())
+  channelEmotes.get(ch)!.add(name.toLowerCase())
+  // Also register globally for token type detection
+  registerEmote(name)
+}
+
+// Check if a token is a known emote (global or any channel)
+function isKnownEmote(name: string): boolean {
+  return knownEmotes.has(name.toLowerCase())
+}
+
+// --- Fetch emotes from 7TV/BTTV/FFZ APIs ---
+
+async function fetch7TVGlobal(): Promise<string[]> {
+  try {
+    const res = await fetch('https://7tv.io/v3/emote-sets/global')
+    const data = await res.json() as any
+    return (data.emotes || []).map((e: any) => e.name)
+  } catch (err: any) {
+    console.error('[emotes] 7TV global fetch failed:', err.message)
+    return []
+  }
+}
+
+async function fetch7TVChannel(twitchId: string): Promise<string[]> {
+  try {
+    const res = await fetch(`https://7tv.io/v3/users/twitch/${twitchId}`)
+    const data = await res.json() as any
+    return (data.emote_set?.emotes || []).map((e: any) => e.name)
+  } catch (err: any) {
+    console.error(`[emotes] 7TV channel ${twitchId} fetch failed:`, err.message)
+    return []
+  }
+}
+
+async function fetchBTTVGlobal(): Promise<string[]> {
+  try {
+    const res = await fetch('https://api.betterttv.net/3/cached/emotes/global')
+    const data = await res.json() as any
+    return (data || []).map((e: any) => e.code)
+  } catch (err: any) {
+    console.error('[emotes] BTTV global fetch failed:', err.message)
+    return []
+  }
+}
+
+async function fetchBTTVChannel(twitchId: string): Promise<string[]> {
+  try {
+    const res = await fetch(`https://api.betterttv.net/3/cached/users/twitch/${twitchId}`)
+    const data = await res.json() as any
+    const shared = (data.sharedEmotes || []).map((e: any) => e.code)
+    const channel = (data.channelEmotes || []).map((e: any) => e.code)
+    return [...shared, ...channel]
+  } catch (err: any) {
+    console.error(`[emotes] BTTV channel ${twitchId} fetch failed:`, err.message)
+    return []
+  }
+}
+
+async function fetchFFZGlobal(): Promise<string[]> {
+  try {
+    const res = await fetch('https://api.frankerfacez.com/v1/set/global')
+    const data = await res.json() as any
+    const emotes: string[] = []
+    for (const set of Object.values(data.sets || {}) as any[]) {
+      for (const e of (set.emoticons || [])) emotes.push(e.name)
+    }
+    return emotes
+  } catch (err: any) {
+    console.error('[emotes] FFZ global fetch failed:', err.message)
+    return []
+  }
+}
+
+async function fetchFFZChannel(twitchId: string): Promise<string[]> {
+  try {
+    const res = await fetch(`https://api.frankerfacez.com/v1/room/id/${twitchId}`)
+    const data = await res.json() as any
+    const emotes: string[] = []
+    for (const set of Object.values(data.sets || {}) as any[]) {
+      for (const e of (set.emoticons || [])) emotes.push(e.name)
+    }
+    return emotes
+  } catch (err: any) {
+    console.error(`[emotes] FFZ channel ${twitchId} fetch failed:`, err.message)
+    return []
+  }
+}
+
+// Load all global emotes from 7TV/BTTV/FFZ
+export async function loadGlobalEmotes(): Promise<void> {
+  console.log('[emotes] Loading global emotes from 7TV, BTTV, FFZ...')
+  const [stv, bttv, ffz] = await Promise.all([
+    fetch7TVGlobal(),
+    fetchBTTVGlobal(),
+    fetchFFZGlobal(),
+  ])
+
+  for (const name of [...stv, ...bttv, ...ffz]) registerEmote(name)
+  console.log(`[emotes] Loaded ${knownEmotes.size} global emotes (7TV: ${stv.length}, BTTV: ${bttv.length}, FFZ: ${ffz.length})`)
+}
+
+// Resolve Twitch login -> user ID via GQL
+async function resolveTwitchId(login: string): Promise<string | null> {
+  try {
+    const res = await fetch('https://gql.twitch.tv/gql', {
+      method: 'POST',
+      headers: {
+        'Client-ID': 'kimne78kx3ncx6brgo4mv6wki5h1ko',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: `query { user(login: "${login}") { id } }` }),
+    })
+    const data = await res.json() as any
+    return data?.data?.user?.id || null
+  } catch {
+    return null
+  }
+}
+
+// Load emotes for a specific channel (resolves Twitch ID automatically)
+export async function loadChannelEmotes(channel: string, twitchId?: string): Promise<void> {
+  if (!twitchId) {
+    twitchId = await resolveTwitchId(channel) || undefined
+    if (!twitchId) {
+      console.error(`[emotes] Could not resolve Twitch ID for ${channel}`)
+      return
+    }
+  }
+  const [stv, bttv, ffz] = await Promise.all([
+    fetch7TVChannel(twitchId),
+    fetchBTTVChannel(twitchId),
+    fetchFFZChannel(twitchId),
+  ])
+
+  for (const name of [...stv, ...bttv, ...ffz]) registerChannelEmote(channel, name)
+  const total = stv.length + bttv.length + ffz.length
+  console.log(`[emotes] Loaded ${total} emotes for ${channel} (7TV: ${stv.length}, BTTV: ${bttv.length}, FFZ: ${ffz.length})`)
+}
+
 // --- Gift sub detection tokens ---
 const GIFT_SUB_TOKENS = new Set(['gifted', 'gifting'])
 const GIFT_SUB_CONTEXT = new Set(['sub', 'subs', 'tier'])
@@ -252,10 +464,15 @@ export function tokenize(text: string): Token[] {
 function classifyWord(raw: string): Token {
   const lower = raw.toLowerCase()
 
-  // Direct lookup first (covers emotes + exact words)
+  // Direct lookup first (covers emotes + exact words with vibes)
   const direct = VIBE_MAP.get(lower)
   if (direct) {
     return { raw, normalized: lower, type: direct.type, vibe: direct.vibe, weight: direct.weight }
+  }
+
+  // Check if it's a known emote (from 7TV/BTTV/FFZ) — case-insensitive
+  if (isKnownEmote(raw)) {
+    return { raw, normalized: lower, type: 'emote', vibe: 'neutral', weight: 0 }
   }
 
   // Try normalized (collapsed repeats): LOOOOL -> lol, OMEGALUUUL -> omegalul
@@ -326,9 +543,30 @@ export function isGiftSub(tokens: Token[]): boolean {
 }
 
 // --- Message analysis: tokenize + score in one call ---
-export function analyzeMessage(text: string): { tokens: Token[]; scores: VibeScores; giftSub: boolean } {
+export interface MessageAnalysis {
+  tokens: Token[]
+  scores: VibeScores
+  giftSub: boolean
+  emoteOnly: boolean  // true if message is purely emotes/emoji (no real words)
+  emoteCount: number  // number of emote tokens
+  wordCount: number   // number of non-emote word tokens
+}
+
+export function analyzeMessage(text: string): MessageAnalysis {
   const tokens = tokenize(text)
   const scores = scoreTokens(tokens)
   const giftSub = isGiftSub(tokens)
-  return { tokens, scores, giftSub }
+
+  // Count token types
+  let emoteCount = 0
+  let wordCount = 0
+  for (const t of tokens) {
+    if (t.type === 'emote' || t.type === 'emoji') emoteCount++
+    else if (t.type === 'word') wordCount++
+  }
+
+  // Emote-only: all meaningful tokens are emotes/emoji (ignore punctuation, mentions, urls)
+  const emoteOnly = emoteCount > 0 && wordCount === 0
+
+  return { tokens, scores, giftSub, emoteOnly, emoteCount, wordCount }
 }

@@ -10,6 +10,7 @@ import { tempo as tempoChain } from 'viem/chains'
 import { connectFirehose, getTrending, getChannel, getSpikes, getStats, isConnected, getVodTimestamp, getVodUrl, isStreamLive, onSpike, getViewerCount, setActiveChannel, removeActiveChannel } from './firehose.js'
 import { summarizeChannel, classifySpike, classifySpikeDirect, summarizeChannelDirect, getLLMBudget, hasDirectAPI, restoreLLMUsage } from './summarize.js'
 import { startMomentCapture, getMoments, getMomentById, getMomentsByUser, watchChannel, unwatchChannel, getWatchedChannels, getMomentStats, getClippedMoments, getClippedMomentsCount, initWatchedChannels, getUserChannels, addUserChannel, removeUserChannel, confirmUserChannel } from './moments.js'
+import { loadGlobalEmotes } from './tokenizer.js'
 import { setTwitchAuth, getTwitchAuth, createClip, restoreTwitchAuth } from './clip.js'
 import { createUser, getUser, createSession, validateSession, destroySession, generateInviteCode, validateInviteCode, redeemInviteCode, getInviteCodes, getAllUsers, isAdmin, isDesignatedAdmin, checkRateLimit, getSessionCookie, clearSessionCookie, parseSessionToken, getAuthStats, createPendingRegistration, consumePendingRegistration, deleteUser, deleteInviteCode, addToWhitelist, removeFromWhitelist, getWhitelist, isWhitelisted, loadWhitelist } from './auth.js'
 import { initDatabase } from './db/index.js'
@@ -840,6 +841,10 @@ async function start() {
   await restoreTwitchAuth()
   await restoreLLMUsage()
   await loadWhitelist()
+  await loadGlobalEmotes()
+
+  // Refresh global emotes every 30 minutes
+  setInterval(() => loadGlobalEmotes(), 30 * 60 * 1000)
 
   app.listen(PORT, () => {
     console.log(`[server] Clippy API running on http://localhost:${PORT}`)

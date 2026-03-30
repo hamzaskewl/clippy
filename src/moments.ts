@@ -1,6 +1,7 @@
 import { onSpike, getRecentMessages, getVodTimestamp, getVodUrl, setActiveChannel, removeActiveChannel, isStreamLive } from './firehose.js'
 import { classifySpikeDirect, classifySpike, hasDirectAPI } from './summarize.js'
 import { createClip, hasTwitchAuth } from './clip.js'
+import { loadChannelEmotes } from './tokenizer.js'
 import { db } from './db/index.js'
 import { moments as momentsTable, watchedChannels as watchedTable, userChannels as userChannelsTable } from './db/schema.js'
 import { eq, desc, and, sql } from 'drizzle-orm'
@@ -213,6 +214,9 @@ export async function confirmUserChannel(userId: string, channel: string): Promi
   watchedChannelsSet.add(ch)
   setActiveChannel(ch)
 
+  // Load 7TV/BTTV/FFZ emotes for this channel
+  loadChannelEmotes(ch).catch(() => {})
+
   console.log(`[user-ch] ${userId} confirmed channel: ${ch} (now auto-clipping)`)
   return { ok: true }
 }
@@ -363,29 +367,20 @@ export function startMomentCapture() {
           moment.clipWorthy = result.clipWorthy
           console.log(`[moments] #${memId} LLM: ${result.mood} / clipWorthy=${result.clipWorthy} — "${result.description}"`)
 
-          if (hasTwitchAuth()) {
+          // Only create clips for moments the LLM deems clip-worthy
+          if (result.clipWorthy && hasTwitchAuth()) {
             const clip = await createClip(spike.channel)
             if (clip) {
               moment.clipUrl = clip.clipUrl
               moment.clipId = clip.clipId
               console.log(`[moments] #${memId} clipped: ${clip.clipUrl}`)
             }
+          } else if (!result.clipWorthy) {
+            console.log(`[moments] #${memId} skipped clipping — not clip-worthy`)
           }
         }
       } catch (err: any) {
         console.error(`[moments] #${memId} classify failed:`, err.message)
-      }
-
-      // Always try to clip watched channels
-      if (hasTwitchAuth() && !moment.clipUrl) {
-        try {
-          const clip = await createClip(spike.channel)
-          if (clip) {
-            moment.clipUrl = clip.clipUrl
-            moment.clipId = clip.clipId
-            console.log(`[moments] #${memId} clipped: ${clip.clipUrl}`)
-          }
-        } catch {}
       }
     }
 
