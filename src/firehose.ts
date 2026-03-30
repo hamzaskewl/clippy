@@ -1,4 +1,7 @@
 import WebSocket from 'ws'
+import { analyzeMessage } from './tokenizer.js'
+export type { Vibe, VibeScores } from './tokenizer.js'
+import type { Vibe, VibeScores } from './tokenizer.js'
 
 export interface ChatMessage {
   channel: string
@@ -12,70 +15,6 @@ export interface ChatMessage {
   }
 }
 
-// Vibe categories — what the chat is feeling
-export type Vibe = 'funny' | 'hype' | 'awkward' | 'win' | 'loss' | 'neutral'
-
-export interface VibeScores {
-  funny: number
-  hype: number
-  awkward: number
-  win: number
-  loss: number
-}
-
-// Pattern matching for chat vibes
-const VIBE_PATTERNS: { pattern: RegExp; vibe: Vibe; weight: number }[] = [
-  // Funny
-  { pattern: /\bLO+L?\b/i, vibe: 'funny', weight: 1 },
-  { pattern: /\bLMAO\b/i, vibe: 'funny', weight: 2 },
-  { pattern: /\bROFL\b/i, vibe: 'funny', weight: 2 },
-  { pattern: /\bHAHA+\b/i, vibe: 'funny', weight: 1 },
-  { pattern: /\bKEKW\b/i, vibe: 'funny', weight: 2 },
-  { pattern: /\bOMEGALUL\b/i, vibe: 'funny', weight: 2 },
-  { pattern: /\bLUL\b/i, vibe: 'funny', weight: 1 },
-  { pattern: /💀/g, vibe: 'funny', weight: 2 },
-  { pattern: /\b:D\b/, vibe: 'funny', weight: 1 },
-  // Hype
-  { pattern: /\bOOO+\b/i, vibe: 'hype', weight: 2 },
-  { pattern: /\bPOG\w*/i, vibe: 'hype', weight: 2 },
-  { pattern: /\bLETS\s*GO+\b/i, vibe: 'hype', weight: 2 },
-  { pattern: /\bHOLY\b/i, vibe: 'hype', weight: 1 },
-  { pattern: /\bINSANE\b/i, vibe: 'hype', weight: 2 },
-  { pattern: /\bALARM\b/i, vibe: 'hype', weight: 2 },
-  { pattern: /🚨/g, vibe: 'hype', weight: 2 },
-  { pattern: /\bmaxwin\b/i, vibe: 'hype', weight: 2 },
-  // Awkward
-  { pattern: /\bu+h+\b/i, vibe: 'awkward', weight: 1 },
-  { pattern: /\byikes\b/i, vibe: 'awkward', weight: 2 },
-  { pattern: /\bmonkaS\b/, vibe: 'awkward', weight: 2 },
-  { pattern: /\bweird\b/i, vibe: 'awkward', weight: 1 },
-  { pattern: /\beww?\b/i, vibe: 'awkward', weight: 1 },
-  { pattern: /\bcringe\b/i, vibe: 'awkward', weight: 2 },
-  { pattern: /\?\?\?+/g, vibe: 'awkward', weight: 1 },
-  // Win
-  { pattern: /\bW{2,}\b/, vibe: 'win', weight: 2 },
-  { pattern: /\bWW\b/, vibe: 'win', weight: 2 },
-  { pattern: /\bW\s+(TAKE|CHAT|STREAMER)\b/i, vibe: 'win', weight: 2 },
-  { pattern: /\bgoat\b/i, vibe: 'win', weight: 1 },
-  { pattern: /\bGOATED\b/i, vibe: 'win', weight: 2 },
-  // Loss
-  { pattern: /\bL{2,}\b/, vibe: 'loss', weight: 2 },
-  { pattern: /\bLL\b/, vibe: 'loss', weight: 2 },
-  { pattern: /\bL\s+(TAKE|CHAT|STREAMER)\b/i, vibe: 'loss', weight: 2 },
-  { pattern: /\bRIP\b/i, vibe: 'loss', weight: 1 },
-  { pattern: /\bSadge\b/, vibe: 'loss', weight: 1 },
-]
-
-function scoreMessage(text: string): VibeScores {
-  const scores: VibeScores = { funny: 0, hype: 0, awkward: 0, win: 0, loss: 0 }
-  for (const { pattern, vibe, weight } of VIBE_PATTERNS) {
-    if (vibe === 'neutral') continue
-    if (pattern.test(text)) {
-      scores[vibe] += weight
-    }
-  }
-  return scores
-}
 
 export interface ChannelState {
   name: string
@@ -128,16 +67,12 @@ function getOrCreateChannel(name: string): ChannelState {
   return state
 }
 
-// Filter out gifted sub messages — they spike chat artificially
-const GIFT_SUB_PATTERN = /gifted a (Tier \d |)sub to |is gifting \d+ (Tier \d )?sub|gifted \d+ (Tier \d )?subs? /i
-
-function isGiftSubMessage(text: string): boolean {
-  return GIFT_SUB_PATTERN.test(text)
-}
-
 function processMessage(msg: ChatMessage) {
+  // Tokenize once — used for gift sub detection + vibe scoring
+  const { scores, giftSub } = analyzeMessage(msg.text)
+
   // Skip gifted sub messages entirely — they inflate rates artificially
-  if (isGiftSubMessage(msg.text)) return
+  if (giftSub) return
 
   const isActive = activeChannels.has(msg.channel.toLowerCase())
 
@@ -176,7 +111,6 @@ function processMessage(msg: ChatMessage) {
   state.messageTimes.push({ time: now, user: msg.displayName.toLowerCase() })
   state.recentMessages.push(msg)
 
-  const scores = scoreMessage(msg.text)
   const hasVibe = scores.funny + scores.hype + scores.awkward + scores.win + scores.loss > 0
   if (hasVibe) {
     state.vibeWindow.push({ time: now, scores })
@@ -435,7 +369,7 @@ export function getRecentMessages(channelName: string, limit = 100): string[] {
   const state = channels.get(channelName) || channels.get(channelName.toLowerCase())
   if (!state) return []
   return state.recentMessages.slice(-limit)
-    .filter(m => !isGiftSubMessage(m.text))
+    .filter(m => !analyzeMessage(m.text).giftSub)
     .map(m => `${m.displayName}: ${m.text}`)
 }
 
