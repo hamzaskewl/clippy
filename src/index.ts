@@ -55,6 +55,7 @@ const mppx = Mppx.create({
 // --- Twitch OAuth config ---
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || ''
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || ''
+const BASE_URL = process.env.BASE_URL || ''
 let twitchUserToken: string | null = null
 let twitchUserId: string | null = null
 
@@ -108,11 +109,11 @@ app.get('/auth/me', async (req, res) => {
 // --- Twitch OAuth for user login ---
 // Supports ?code=INVITE_CODE to auto-apply invite after OAuth
 app.get('/auth/twitch', rateLimit, (req, res) => {
-  const proto = req.get('x-forwarded-proto') || req.protocol
   const inviteCode = req.query.code as string || req.query.invite as string || ''
   // Pass invite code through OAuth state param
   const state = inviteCode ? Buffer.from(JSON.stringify({ invite: inviteCode })).toString('base64url') : ''
-  const redirect = `${proto}://${req.get('host')}/auth/twitch/callback`
+  const fallback = `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}`
+  const redirect = `${BASE_URL || fallback}/auth/twitch/callback`
   const url = `https://id.twitch.tv/oauth2/authorize?client_id=${TWITCH_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&scope=clips:edit+editor:manage:clips${state ? `&state=${state}` : ''}`
   res.redirect(url)
 })
@@ -132,7 +133,8 @@ app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
   }
 
   const proto = req.get('x-forwarded-proto') || req.protocol
-  const redirect = `${proto}://${req.get('host')}/auth/twitch/callback`
+  const fallback = `${proto}://${req.get('host')}`
+  const redirect = `${BASE_URL || fallback}/auth/twitch/callback`
 
   try {
     // Exchange code for token

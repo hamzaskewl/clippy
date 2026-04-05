@@ -8,16 +8,35 @@ if (!DATABASE_URL) {
   console.warn('[db] DATABASE_URL not set — running without persistence (in-memory only)')
 }
 
-const client = DATABASE_URL ? postgres(DATABASE_URL, { max: 10, onnotice: () => {} }) : null
+const client = DATABASE_URL ? postgres(DATABASE_URL, { max: 10, connect_timeout: 30, onnotice: () => {} }) : null
 
 export const db = client ? drizzle(client, { schema }) : null
 
 // Auto-create tables on first connect
-export async function initDatabase() {
+export async function initDatabase(retries = 3) {
   if (!db || !client) {
     console.log('[db] No database configured — skipping init')
     return
   }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await _initTables()
+    } catch (err: any) {
+      if (attempt < retries && (err.code === 'CONNECT_TIMEOUT' || err.errno === 'CONNECT_TIMEOUT')) {
+        const delay = attempt * 2000
+        console.warn(`[db] Connection timeout (attempt ${attempt}/${retries}), retrying in ${delay / 1000}s...`)
+        await new Promise(r => setTimeout(r, delay))
+      } else {
+        console.error('[db] Init error:', err.message)
+        return
+      }
+    }
+  }
+}
+
+async function _initTables() {
+  if (!client) return
 
   try {
     // Create tables if they don't exist
@@ -153,7 +172,7 @@ export async function initDatabase() {
 
     console.log('[db] Tables initialized')
   } catch (err: any) {
-    console.error('[db] Init error:', err.message)
+    throw err
   }
 }
 
