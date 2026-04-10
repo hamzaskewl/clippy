@@ -6,3 +6,8 @@ dist
 server.log
 debug.log
 *.SKILL.md
+
+# Next.js
+.next
+out
+next-env.d.ts

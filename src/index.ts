@@ -92,7 +92,11 @@ app.use((req, res, next) => {
   if (req.path === '/demo.html') return res.status(404).send('Not found')
   next()
 })
-app.use(express.static(path.join(__dirname, '..', 'public')))
+// Serve the Next.js static export from /out. The `extensions: ['html']` flag
+// makes Express resolve `/dashboard` → `out/dashboard.html` automatically.
+// `public/` (with logo.svg + logoclip.png) is copied into /out by Next.js at
+// build time, so a single static root covers both pages and assets.
+app.use(express.static(path.join(__dirname, '..', 'out'), { extensions: ['html'] }))
 
 // --- Auth check endpoint ---
 app.get('/auth/me', async (req, res) => {
@@ -152,7 +156,7 @@ app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
     const data = await tokenRes.json() as any
     if (!data.access_token) {
       console.error('[auth] Twitch OAuth failed:', data)
-      return res.redirect('/login.html?error=oauth_failed')
+      return res.redirect('/login?error=oauth_failed')
     }
 
     // Get Twitch user info
@@ -161,7 +165,7 @@ app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
     })
     const meData = await meRes.json() as any
     const twitchUser = meData.data?.[0]
-    if (!twitchUser) return res.redirect('/login.html?error=user_fetch_failed')
+    if (!twitchUser) return res.redirect('/login?error=user_fetch_failed')
 
     const twitchId = twitchUser.id
     const username = twitchUser.display_name || twitchUser.login
@@ -179,7 +183,7 @@ app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
       const session = await createSession(user.id)
       res.setHeader('Set-Cookie', getSessionCookie(session.token, isSecure))
       console.log(`[auth] Login: ${username} (${twitchId}) role=${user.role}`)
-      return res.redirect('/dashboard.html')
+      return res.redirect('/dashboard')
     }
 
     // 2. Designated admin — create + log in, no invite needed
@@ -189,7 +193,7 @@ app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
       const session = await createSession(user.id)
       res.setHeader('Set-Cookie', getSessionCookie(session.token, isSecure))
       console.log(`[auth] Admin login: ${username} (${twitchId})`)
-      return res.redirect('/dashboard.html')
+      return res.redirect('/dashboard')
     }
 
     // 3. Whitelisted user — create + log in, no invite needed
@@ -199,7 +203,7 @@ app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
       const session = await createSession(user.id)
       res.setHeader('Set-Cookie', getSessionCookie(session.token, isSecure))
       console.log(`[auth] Whitelisted user registered: ${username} (${twitchId})`)
-      return res.redirect('/dashboard.html')
+      return res.redirect('/dashboard')
     }
 
     // 4. New user — if invite code from URL, try to auto-apply
@@ -212,7 +216,7 @@ app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
         const session = await createSession(user.id)
         res.setHeader('Set-Cookie', getSessionCookie(session.token, isSecure))
         console.log(`[auth] New user auto-registered: ${username} (${twitchId}) with invite from URL: ${inviteFromUrl}`)
-        return res.redirect('/dashboard.html')
+        return res.redirect('/dashboard')
       }
     }
 
@@ -221,10 +225,10 @@ app.get('/auth/twitch/callback', rateLimit, async (req, res) => {
     const avatarParam = profileImage ? `&avatar=${encodeURIComponent(profileImage)}` : ''
     const inviteParam = inviteFromUrl ? `&prefill=${encodeURIComponent(inviteFromUrl)}` : ''
     console.log(`[auth] New user ${username} — redirecting to invite code page`)
-    res.redirect(`/invite.html?token=${pending.token}&name=${encodeURIComponent(username)}${avatarParam}${inviteParam}`)
+    res.redirect(`/invite?token=${pending.token}&name=${encodeURIComponent(username)}${avatarParam}${inviteParam}`)
   } catch (err: any) {
     console.error('[auth] OAuth error:', err.message)
-    res.redirect('/login.html?error=server_error')
+    res.redirect('/login?error=server_error')
   }
 })
 
@@ -233,15 +237,15 @@ app.get('/auth/verify-invite', rateLimit, async (req, res) => {
   const token = req.query.token as string
   const inviteCode = req.query.invite as string
 
-  if (!token || !inviteCode) return res.redirect('/login.html')
+  if (!token || !inviteCode) return res.redirect('/login')
 
   const pending = consumePendingRegistration(token)
-  if (!pending) return res.redirect('/login.html?error=server_error')
+  if (!pending) return res.redirect('/login?error=server_error')
 
   if (!(await validateInviteCode(inviteCode))) {
     const newPending = createPendingRegistration(pending.twitchId, pending.username, pending.profileImage, pending.twitchAccessToken)
     const avatarParam = pending.profileImage ? `&avatar=${encodeURIComponent(pending.profileImage)}` : ''
-    return res.redirect(`/invite.html?token=${newPending.token}&name=${encodeURIComponent(pending.username)}${avatarParam}&error=invalid_invite`)
+    return res.redirect(`/invite?token=${newPending.token}&name=${encodeURIComponent(pending.username)}${avatarParam}&error=invalid_invite`)
   }
 
   await redeemInviteCode(inviteCode, pending.twitchId, pending.username)
@@ -253,7 +257,7 @@ app.get('/auth/verify-invite', rateLimit, async (req, res) => {
   res.setHeader('Set-Cookie', getSessionCookie(session.token, isSecure))
 
   console.log(`[auth] New user registered: ${pending.username} (${pending.twitchId}) with invite ${inviteCode}`)
-  res.redirect('/dashboard.html')
+  res.redirect('/dashboard')
 })
 
 app.post('/auth/logout', async (req, res) => {
@@ -391,7 +395,7 @@ app.get('/api', (_req, res) => {
     status: stats.connected ? 'live' : 'connecting',
     ...stats,
     llms_txt: '/llms.txt',
-    docs: '/docs.html',
+    docs: '/docs',
     endpoints: {
       free: {
         'GET /health': 'Status check',

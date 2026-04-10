@@ -314,8 +314,16 @@ async function updateMoment(id: number, updates: Partial<Moment>) {
 export function startMomentCapture() {
   console.log('[moments] Auto-capture enabled — storing moments on spike detection')
 
+  const minConfidence = parseFloat(process.env.SPIKE_MIN_CONFIDENCE || '0.3')
+
   onSpike(async (spike) => {
-    if (spike.jumpPercent < 40) return
+    // v1 path: legacy jumpPercent gate
+    // v2 path: confidence-based gate (z-score driven), since jumpPercent is meaningless when baseline is near zero
+    if (spike.detector === 'v2') {
+      if (typeof spike.confidence === 'number' && spike.confidence < minConfidence) return
+    } else {
+      if (spike.jumpPercent < 40) return
+    }
 
     const memId = nextMemId++
     const chatSnapshot = getRecentMessages(spike.channel, 50)

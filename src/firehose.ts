@@ -33,7 +33,23 @@ export interface ChannelState {
   peakRate: number
   // Vibe tracking — rolling scores over last 60s of messages
   vibeWindow: { time: number; scores: VibeScores }[]
+  // v2 detector state (EWMA + Welford variance + shape confirmation)
+  ewmaMean: number
+  ewmaVar: number
+  riseTicks: number
+  fallTicks: number
+  pendingSpike: { startedAt: number; peakBurst: number; peakZ: number; peakAt: number } | null
 }
+
+// v2 spike detector — gated on env flag, runs alongside v1 until validated
+const SPIKE_V2 = process.env.SPIKE_V2 === '1'
+const ALPHA_MEAN = 0.05         // EWMA, ~20s half-life for baseline
+const ALPHA_VAR = 0.02          // slower variance adapt
+const STDDEV_FLOOR = 0.25       // prevents exploding z on quiet channels
+const Z_TRIGGER = 3.0           // candidate threshold (stddevs above mean)
+const RISE_TICKS_REQUIRED = 2   // ≥2s of sustained rise before fire
+const PEAK_FALLOFF = 0.7        // peak considered done when burst < 0.7 * peakBurst for 2 ticks
+const WARMUP_SAMPLES = 20       // ticks before any spike can fire
 
 const channels = new Map<string, ChannelState>()
 let totalMsgsPerSec = 0
@@ -61,6 +77,11 @@ function getOrCreateChannel(name: string): ChannelState {
       lastSpikeAt: null,
       peakRate: 0,
       vibeWindow: [],
+      ewmaMean: 0,
+      ewmaVar: 0,
+      riseTicks: 0,
+      fallTicks: 0,
+      pendingSpike: null,
     }
     channels.set(name, state)
   }
@@ -130,6 +151,11 @@ function processMessage(msg: ChatMessage) {
         lastSpikeAt: null,
         peakRate: 0,
         vibeWindow: [],
+        ewmaMean: 0,
+        ewmaVar: 0,
+        riseTicks: 0,
+        fallTicks: 0,
+        pendingSpike: null,
       }
       channels.set(msg.channel, state)
     }
@@ -180,8 +206,8 @@ setInterval(() => {
     // Active channels: full processing
     state.messageTimes = state.messageTimes.filter(m => m.time > cutoff)
 
-    // 5s burst rate — count messages but cap each user at 2 per window
-    // This way: 1 spammer = max 0.4, but 10 real chatters = 4.0
+    // 5s burst rate — count messages but cap each user at 3 per window
+    // This way: 1 spammer = max 0.6, but 10 real chatters = 6.0
     const cutoff5s = now - 5_000
     const msgs5s = state.messageTimes.filter(m => m.time > cutoff5s)
     const userCounts5s = new Map<string, number>()
@@ -189,11 +215,11 @@ setInterval(() => {
     for (const m of msgs5s) {
       const count = (userCounts5s.get(m.user) || 0) + 1
       userCounts5s.set(m.user, count)
-      if (count <= 2) capped5s++ // cap each user at 2 messages per 5s window
+      if (count <= 3) capped5s++ // cap each user at 3 messages per 5s window
     }
     state.burst = capped5s / 5
 
-    // 30s sustained rate — same capping logic, 3 msgs max per user
+    // 30s sustained rate — same capping logic, 5 msgs max per user
     const cutoff30s = now - 30_000
     const msgs30s = state.messageTimes.filter(m => m.time > cutoff30s)
     const userCounts30s = new Map<string, number>()
@@ -201,7 +227,7 @@ setInterval(() => {
     for (const m of msgs30s) {
       const count = (userCounts30s.get(m.user) || 0) + 1
       userCounts30s.set(m.user, count)
-      if (count <= 3) capped30s++ // cap each user at 3 messages per 30s window
+      if (count <= 5) capped30s++ // cap each user at 5 messages per 30s window
     }
     state.sustained = capped30s / 30
 
@@ -223,12 +249,37 @@ setInterval(() => {
       state.baseline = sum / state.rateSamples.length
     }
 
+    // v2 detector — EWMA mean + Welford-style variance, in lockstep with v1 baseline
+    // Always updated so we can flip SPIKE_V2 at runtime without warmup penalty.
+    if (state.sampleCount < WARMUP_SAMPLES) {
+      // Seed phase: simple running mean to bootstrap ewmaMean
+      state.ewmaMean = ((state.ewmaMean * (state.sampleCount - 1)) + state.burst) / state.sampleCount
+    } else {
+      const delta = state.burst - state.ewmaMean
+      state.ewmaMean += ALPHA_MEAN * delta
+      state.ewmaVar = (1 - ALPHA_VAR) * (state.ewmaVar + ALPHA_VAR * delta * delta)
+    }
+    const v2Stddev = Math.sqrt(state.ewmaVar) + STDDEV_FLOOR
+    const v2Z = (state.burst - state.ewmaMean) / v2Stddev
+
+    // Shape confirmation: count consecutive ticks with above-mean burst
+    if (state.burst > state.ewmaMean + v2Stddev) state.riseTicks++
+    else state.riseTicks = 0
+
     // Clean old vibes
     state.vibeWindow = state.vibeWindow.filter(v => v.time > cutoff)
 
-    // Spike: burst > 35% above baseline
-    const warmedUp = state.rateSamples.length >= 15
-    const isSpike = warmedUp && state.burst > state.baseline * Math.max(1.5, 2.5 - (state.baseline * 0.1)) && state.burst > 1
+    // Spike detection — v2 (EWMA + z-score + shape) or v1 (legacy ratio)
+    let isSpike = false
+    if (SPIKE_V2) {
+      const warmedUpV2 = state.sampleCount >= WARMUP_SAMPLES
+      const absFloor = Math.max(2, state.ewmaMean * 1.4)  // grows WITH baseline (fixes v1 critique)
+      const isCandidate = warmedUpV2 && v2Z >= Z_TRIGGER && state.burst >= absFloor
+      isSpike = isCandidate && state.riseTicks >= RISE_TICKS_REQUIRED
+    } else {
+      const warmedUp = state.rateSamples.length >= 15
+      isSpike = warmedUp && state.burst > state.baseline * Math.max(1.5, 2.5 - (state.baseline * 0.1)) && state.burst > 1
+    }
 
     if (isSpike) {
       const wasAlreadySpiking = state.lastSpikeAt && (now - state.lastSpikeAt) < 30_000
@@ -238,19 +289,28 @@ setInterval(() => {
       }
 
       // Only emit new spike events (debounce 30s)
-      // Check viewer count — only care about streams with 1000+ viewers
       if (!wasAlreadySpiking && spikeListeners.size > 0) {
         const channelName = state.name
         const burstSnap = state.burst
         const sustainedSnap = state.sustained
-        const baselineSnap = state.baseline
-        const peakSnap = state.peakRate
+        // For v2, baseline is the EWMA mean (fundamentally what the detector compared against).
+        // For v1, baseline is the legacy rolling-mean. Both keep the same field name for consumers.
+        const baselineSnap = SPIKE_V2 ? state.ewmaMean : state.baseline
+        const zSnap = v2Z
+        const confidenceSnap = Math.max(0, Math.min(1, (v2Z - Z_TRIGGER) / 4))
+        const riseTicksSnap = state.riseTicks
+        // Open the peak-tracking window so getSpikes/getChannel can report a peak burst
+        if (SPIKE_V2) {
+          state.pendingSpike = { startedAt: now, peakBurst: burstSnap, peakZ: zSnap, peakAt: now }
+          state.fallTicks = 0
+        }
 
         getStreamContext(channelName).then(ctx => {
           if (!ctx) return // skip offline streams
 
           const vibes = getVibes(state)
           const chatSnapshot = state.recentMessages.slice(-50).map(m => `${m.displayName}: ${m.text}`)
+          const denom = baselineSnap > 0.01 ? baselineSnap : 0.01
           const spike = {
             channel: channelName,
             spikeAt: now,
@@ -258,17 +318,38 @@ setInterval(() => {
             burst: Math.round(burstSnap * 100) / 100,
             sustained: Math.round(sustainedSnap * 100) / 100,
             baseline: Math.round(baselineSnap * 100) / 100,
-            jumpPercent: Math.round(((burstSnap - baselineSnap) / baselineSnap) * 100),
+            jumpPercent: Math.round(((burstSnap - baselineSnap) / denom) * 100),
             vibe: vibes.dominant,
             vibeIntensity: vibes.intensity,
             chatSnapshot,
             game: ctx.game,
             streamTitle: ctx.title,
+            // v2-only fields (always emitted; consumers can ignore when detector === 'v1')
+            detector: SPIKE_V2 ? 'v2' : 'v1',
+            zScore: Math.round(zSnap * 100) / 100,
+            confidence: Math.round(confidenceSnap * 100) / 100,
+            peakBurst: Math.round(burstSnap * 100) / 100,
+            riseDurationMs: riseTicksSnap * 1000,
           }
           for (const listener of spikeListeners) {
             listener(spike)
           }
         }).catch(() => {})
+      }
+    }
+
+    // v2 peak tracking — update peak for up to 15s after fire, then finalize
+    if (SPIKE_V2 && state.pendingSpike) {
+      if (state.burst > state.pendingSpike.peakBurst) {
+        state.pendingSpike.peakBurst = state.burst
+        state.pendingSpike.peakZ = v2Z
+        state.pendingSpike.peakAt = now
+      }
+      if (state.burst < PEAK_FALLOFF * state.pendingSpike.peakBurst) state.fallTicks++
+      else state.fallTicks = 0
+      if (state.fallTicks >= 2 || now - state.pendingSpike.startedAt > 15_000) {
+        state.pendingSpike = null
+        state.fallTicks = 0
       }
     }
 
@@ -367,16 +448,30 @@ export function getChannel(name: string) {
   const state = channels.get(name) || channels.get(name.toLowerCase())
   if (!state) return null
 
-  const isSpike = state.rateSamples.length >= 15 && state.baseline > 3 && state.burst > state.baseline * Math.max(1.5, 2.5 - (state.baseline * 0.1))
+  // When v2 is on, report ewmaMean as the canonical baseline so /channel reflects what the
+  // detector is actually using.
+  const baseline = SPIKE_V2 ? state.ewmaMean : state.baseline
+  const stddev = Math.sqrt(state.ewmaVar) + STDDEV_FLOOR
+  const z = (state.burst - state.ewmaMean) / stddev
+  const confidence = Math.max(0, Math.min(1, (z - Z_TRIGGER) / 4))
+
+  let isSpike: boolean
+  if (SPIKE_V2) {
+    const absFloor = Math.max(2, state.ewmaMean * 1.4)
+    isSpike = state.sampleCount >= WARMUP_SAMPLES && z >= Z_TRIGGER && state.burst >= absFloor && state.riseTicks >= RISE_TICKS_REQUIRED
+  } else {
+    isSpike = state.rateSamples.length >= 15 && state.baseline > 3 && state.burst > state.baseline * Math.max(1.5, 2.5 - (state.baseline * 0.1))
+  }
 
   const vibes = getVibes(state)
+  const denom = baseline > 0.01 ? baseline : 0.01
 
   return {
     channel: state.name,
     burst: Math.round(state.burst * 100) / 100,
     sustained: Math.round(state.sustained * 100) / 100,
-    baseline: Math.round(state.baseline * 100) / 100,
-    jumpPercent: state.baseline > 0 ? Math.round(((state.burst - state.baseline) / state.baseline) * 100) : 0,
+    baseline: Math.round(baseline * 100) / 100,
+    jumpPercent: baseline > 0 ? Math.round(((state.burst - baseline) / denom) * 100) : 0,
     isSpike,
     lastSpikeAt: state.lastSpikeAt,
     peakRate: Math.round(state.peakRate * 100) / 100,
@@ -389,6 +484,9 @@ export function getChannel(name: string) {
       timestamp: m.timestamp,
     })),
     messageCount: state.recentMessages.length,
+    detector: SPIKE_V2 ? 'v2' : 'v1',
+    zScore: Math.round(z * 100) / 100,
+    confidence: Math.round(confidence * 100) / 100,
   }
 }
 
@@ -399,16 +497,24 @@ export function getSpikes(withinMinutes = 5) {
     .filter(ch => ch.lastSpikeAt && ch.lastSpikeAt > cutoff)
     .map(ch => {
       const vibes = getVibes(ch)
+      const baseline = SPIKE_V2 ? ch.ewmaMean : ch.baseline
+      const stddev = Math.sqrt(ch.ewmaVar) + STDDEV_FLOOR
+      const z = (ch.burst - ch.ewmaMean) / stddev
+      const confidence = Math.max(0, Math.min(1, (z - Z_TRIGGER) / 4))
+      const denom = baseline > 0.01 ? baseline : 0.01
       return {
         channel: ch.name,
         spikeAt: ch.lastSpikeAt,
         burst: Math.round(ch.burst * 100) / 100,
         sustained: Math.round(ch.sustained * 100) / 100,
-        baseline: Math.round(ch.baseline * 100) / 100,
-        jumpPercent: ch.baseline > 0 ? Math.round(((ch.burst - ch.baseline) / ch.baseline) * 100) : 0,
+        baseline: Math.round(baseline * 100) / 100,
+        jumpPercent: baseline > 0 ? Math.round(((ch.burst - baseline) / denom) * 100) : 0,
         peakRate: Math.round(ch.peakRate * 100) / 100,
         vibe: vibes.dominant,
         vibeIntensity: vibes.intensity,
+        detector: SPIKE_V2 ? 'v2' : 'v1',
+        zScore: Math.round(z * 100) / 100,
+        confidence: Math.round(confidence * 100) / 100,
       }
     })
     .sort((a, b) => b.burst - a.burst)
